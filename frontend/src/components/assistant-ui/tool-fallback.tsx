@@ -1,12 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
 import {
 	type ToolApprovalOption,
 	type ToolCallMessagePart,
@@ -24,6 +17,13 @@ import {
 	XCircleIcon,
 } from "lucide-react";
 import { memo, useCallback, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 const ANIMATION_DURATION = 200;
 
@@ -595,11 +595,11 @@ ToolFallback.Approval = ToolFallbackApproval;
 
 export {
 	ToolFallback,
+	ToolFallbackApproval,
+	ToolFallbackArgs,
+	ToolFallbackContent,
+	ToolFallbackError,
+	ToolFallbackResult,
 	ToolFallbackRoot,
 	ToolFallbackTrigger,
-	ToolFallbackContent,
-	ToolFallbackArgs,
-	ToolFallbackResult,
-	ToolFallbackError,
-	ToolFallbackApproval,
 };

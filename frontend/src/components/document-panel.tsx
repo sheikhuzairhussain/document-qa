@@ -3,8 +3,8 @@ import { useCallback, useRef, useState } from "react";
 import type { DocumentSelection } from "../hooks/use-document-selection";
 import { getPdfFiles } from "../lib/files";
 import type { Document } from "../types";
-import { DocumentSection } from "./DocumentSection";
-import { usePdfViewer } from "./PdfViewer";
+import { DocumentSection } from "./document-section";
+import { usePdfViewer } from "./pdf-viewer";
 import { Button } from "./ui/button";
 
 const MIN_WIDTH = 280;
@@ -162,8 +162,9 @@ export function DocumentPanel({
 			style={{ width }}
 			className="relative flex h-full flex-shrink-0 flex-col border-l border-neutral-200 bg-white"
 		>
-			{/* Resize handle */}
-			<div
+			<button
+				type="button"
+				aria-label="Resize document panel"
 				className={`absolute top-0 left-0 z-10 h-full w-1.5 cursor-col-resize transition-colors hover:bg-neutral-300 ${
 					dragging ? "bg-neutral-400" : ""
 				}`}

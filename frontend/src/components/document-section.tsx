@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Document } from "../types";
-import { DocumentRow } from "./DocumentRow";
+import { DocumentRow } from "./document-row";
 import { Checkbox } from "./ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 

@@ -1,4 +1,3 @@
-import { cn, relativeTime } from "@/lib/utils";
 import {
 	AuiIf,
 	ThreadListPrimitive,
@@ -14,6 +13,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useState } from "react";
+import { cn, relativeTime } from "@/lib/utils";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -254,8 +254,9 @@ export function ThreadSidebar({
 				</SidebarGroup>
 			</SidebarContent>
 
-			{/* Drag handle to resize the sidebar (desktop only). */}
-			<div
+			<button
+				type="button"
+				aria-label="Resize conversation sidebar"
 				title="Drag to resize"
 				onMouseDown={onResizeStart}
 				className={cn(

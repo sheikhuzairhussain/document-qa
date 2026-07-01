@@ -1,15 +1,17 @@
+import { FileText, FolderOpen } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import {
 	ActiveThreadProvider,
 	AgentRuntimeProvider,
-} from "@/components/AgentRuntimeProvider";
-import { DocumentPanel } from "@/components/DocumentPanel";
-import { PdfViewerProvider } from "@/components/PdfViewer";
-import { ThreadSidebar } from "@/components/ThreadSidebar";
+} from "@/components/agent-runtime-provider";
 import { Thread } from "@/components/assistant-ui/thread";
+import { DocumentPanel } from "@/components/document-panel";
 import {
 	DocumentsProvider,
 	useDocumentsContext,
 } from "@/components/documents-context";
+import { PdfViewerProvider } from "@/components/pdf-viewer";
+import { ThreadSidebar } from "@/components/thread-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
 	SidebarInset,
@@ -21,8 +23,6 @@ import { useDocumentSelection } from "@/hooks/use-document-selection";
 import { resolveAvailableDocuments } from "@/lib/available-documents";
 import { getPdfFiles } from "@/lib/files";
 import { cn } from "@/lib/utils";
-import { FileText, FolderOpen } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
 
 const SIDEBAR_MIN_WIDTH = 240;
 const SIDEBAR_MAX_WIDTH = 460;

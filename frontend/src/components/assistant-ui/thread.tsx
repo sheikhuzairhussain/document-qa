@@ -1,5 +1,43 @@
 "use client";
 
+import {
+	ActionBarMorePrimitive,
+	ActionBarPrimitive,
+	type AssistantState,
+	AuiIf,
+	BranchPickerPrimitive,
+	ComposerPrimitive,
+	ErrorPrimitive,
+	groupPartByType,
+	MessagePrimitive,
+	SuggestionPrimitive,
+	ThreadPrimitive,
+	type ToolCallMessagePartComponent,
+	useAuiState,
+} from "@assistant-ui/react";
+import {
+	ArrowDownIcon,
+	CheckIcon,
+	ChevronLeftIcon,
+	ChevronRightIcon,
+	CopyIcon,
+	DownloadIcon,
+	FileSearchIcon,
+	MoreHorizontalIcon,
+	PaperclipIcon,
+	PencilIcon,
+	RefreshCwIcon,
+	SendHorizontalIcon,
+	SquareIcon,
+} from "lucide-react";
+import {
+	type ComponentType,
+	createContext,
+	type FC,
+	type PropsWithChildren,
+	useContext,
+	useRef,
+} from "react";
 import { AssistantSources } from "@/components/assistant-ui/assistant-sources";
 import {
 	ComposerAttachments,
@@ -23,44 +61,6 @@ import { useDocumentsContext } from "@/components/documents-context";
 import { Button } from "@/components/ui/button";
 import { getPdfFiles } from "@/lib/files";
 import { cn } from "@/lib/utils";
-import {
-	ActionBarMorePrimitive,
-	ActionBarPrimitive,
-	type AssistantState,
-	AuiIf,
-	BranchPickerPrimitive,
-	ComposerPrimitive,
-	ErrorPrimitive,
-	MessagePrimitive,
-	SuggestionPrimitive,
-	ThreadPrimitive,
-	type ToolCallMessagePartComponent,
-	groupPartByType,
-	useAuiState,
-} from "@assistant-ui/react";
-import {
-	ArrowDownIcon,
-	CheckIcon,
-	ChevronLeftIcon,
-	ChevronRightIcon,
-	CopyIcon,
-	DownloadIcon,
-	FileSearchIcon,
-	MoreHorizontalIcon,
-	PaperclipIcon,
-	PencilIcon,
-	RefreshCwIcon,
-	SendHorizontalIcon,
-	SquareIcon,
-} from "lucide-react";
-import {
-	type ComponentType,
-	type FC,
-	type PropsWithChildren,
-	createContext,
-	useContext,
-	useRef,
-} from "react";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -413,6 +413,7 @@ const AssistantMessage: FC = () => {
 									<span
 										data-slot="aui_assistant-message-indicator"
 										className="animate-pulse font-sans"
+										role="status"
 										aria-label="Assistant is working"
 									>
 										{"●"}

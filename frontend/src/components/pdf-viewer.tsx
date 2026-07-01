@@ -1,13 +1,13 @@
-import type { DocumentChunkCitation } from "@/types";
 import {
-	type PropsWithChildren,
-	Suspense,
 	createContext,
 	lazy,
+	type PropsWithChildren,
+	Suspense,
 	useCallback,
 	useContext,
 	useState,
 } from "react";
+import type { DocumentChunkCitation } from "@/types";
 
 export interface PdfViewerRequest {
 	documentId: string;
@@ -21,7 +21,7 @@ interface PdfViewerContextValue {
 	openDocument: (request: PdfViewerRequest) => void;
 }
 
-const PdfViewerDialog = lazy(() => import("./PdfViewerDialog"));
+const PdfViewerDialog = lazy(() => import("./pdf-viewer-dialog"));
 const PdfViewerContext = createContext<PdfViewerContextValue | null>(null);
 
 export function PdfViewerProvider({ children }: PropsWithChildren) {

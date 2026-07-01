@@ -1,6 +1,15 @@
 "use client";
 
-import { usePdfViewer } from "@/components/PdfViewer";
+import {
+	type MessagePrimitive,
+	type ToolCallMessagePart,
+	type ToolCallMessagePartComponent,
+	type ToolCallMessagePartProps,
+	useAuiState,
+} from "@assistant-ui/react";
+import { ChevronDownIcon, FileSearchIcon, FileTextIcon } from "lucide-react";
+import { type FC, type PropsWithChildren, useMemo } from "react";
+import { usePdfViewer } from "@/components/pdf-viewer";
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -11,15 +20,6 @@ import {
 	extractSourceChunksFromArtifact,
 } from "@/lib/citations";
 import { cn } from "@/lib/utils";
-import {
-	type MessagePrimitive,
-	type ToolCallMessagePart,
-	type ToolCallMessagePartComponent,
-	type ToolCallMessagePartProps,
-	useAuiState,
-} from "@assistant-ui/react";
-import { ChevronDownIcon, FileSearchIcon, FileTextIcon } from "lucide-react";
-import { type FC, type PropsWithChildren, useMemo } from "react";
 
 type DocumentToolCallProps = ToolCallMessagePartProps & {
 	Fallback: ToolCallMessagePartComponent;

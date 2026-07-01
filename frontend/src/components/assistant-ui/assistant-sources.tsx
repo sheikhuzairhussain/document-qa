@@ -1,10 +1,10 @@
 "use client";
 
-import { usePdfViewer } from "@/components/PdfViewer";
-import { extractDocumentSourcesFromParts } from "@/lib/citations";
 import { useAuiState } from "@assistant-ui/react";
 import { FileTextIcon } from "lucide-react";
 import { type FC, useMemo } from "react";
+import { usePdfViewer } from "@/components/pdf-viewer";
+import { extractDocumentSourcesFromParts } from "@/lib/citations";
 
 export const AssistantSources: FC = () => {
 	const messageParts = useAuiState((s) => s.message.parts);

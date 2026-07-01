@@ -19,19 +19,19 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Document as PDFDocument, Page, pdfjs } from "react-pdf";
+import { Page, Document as PDFDocument, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { getDocumentUrl } from "@/lib/api";
 import {
-	type HighlightOverlay,
-	type TextLayerHighlightTarget,
 	buildFindTargets,
 	buildHighlightTarget,
+	type HighlightOverlay,
 	measureHighlightOverlays,
 	renderTextItem,
+	type TextLayerHighlightTarget,
 } from "@/lib/pdf-highlighting";
-import type { PdfViewerRequest } from "./PdfViewer";
+import type { PdfViewerRequest } from "./pdf-viewer";
 import { Button } from "./ui/button";
 import {
 	Dialog,
@@ -449,11 +449,11 @@ export default function PdfViewerDialog({
 									</div>
 								}
 							/>
-							{highlightRects.map((overlay, index) => {
+							{highlightRects.map((overlay) => {
 								const rect = overlay.rect;
 								return (
 									<div
-										key={`${index}:${rect.left}:${rect.top}:${rect.width}:${rect.height}`}
+										key={`${rect.left}:${rect.top}:${rect.width}:${rect.height}:${overlay.active}`}
 										className="pdf-citation-highlight-rect"
 										style={{
 											position: "absolute",

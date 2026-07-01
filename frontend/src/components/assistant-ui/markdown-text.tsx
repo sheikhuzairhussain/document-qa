@@ -12,28 +12,27 @@ import {
 import { CheckIcon, CopyIcon, FileTextIcon } from "lucide-react";
 import {
 	type AnchorHTMLAttributes,
-	type FC,
 	createContext,
+	type FC,
 	memo,
 	useContext,
 	useMemo,
 	useState,
 } from "react";
 import remarkGfm from "remark-gfm";
-
-import { usePdfViewer } from "@/components/PdfViewer";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { usePdfViewer } from "@/components/pdf-viewer";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { DocumentSourceChunk } from "@/lib/citations";
 import {
 	citationHrefToMarker,
 	extractSourceChunksFromParts,
 	replaceCitationMarkersWithLinks,
 } from "@/lib/citations";
-import type { DocumentSourceChunk } from "@/lib/citations";
 import { cn } from "@/lib/utils";
 
 type CitationSource = DocumentSourceChunk;

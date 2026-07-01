@@ -132,12 +132,12 @@ function DropdownMenuShortcut({
 
 export {
 	DropdownMenu,
-	DropdownMenuTrigger,
-	DropdownMenuPortal,
 	DropdownMenuContent,
 	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuPortal,
 	DropdownMenuSeparator,
 	DropdownMenuShortcut,
+	DropdownMenuTrigger,
 };

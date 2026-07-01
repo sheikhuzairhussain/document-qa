@@ -1,19 +1,12 @@
 "use client";
 
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
 import {
 	type ReasoningGroupComponent,
 	type ReasoningMessagePartComponent,
 	useAuiState,
 	useScrollLock,
 } from "@assistant-ui/react";
-import { type VariantProps, cva } from "class-variance-authority";
+import { cva, type VariantProps } from "class-variance-authority";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import {
 	createContext,
@@ -25,6 +18,13 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 const ANIMATION_DURATION = 200;
 
@@ -352,11 +352,11 @@ ReasoningGroup.displayName = "ReasoningGroup";
 
 export {
 	Reasoning,
+	ReasoningContent,
+	ReasoningFade,
 	ReasoningGroup,
 	ReasoningRoot,
-	ReasoningTrigger,
-	ReasoningContent,
 	ReasoningText,
-	ReasoningFade,
+	ReasoningTrigger,
 	reasoningVariants,
 };

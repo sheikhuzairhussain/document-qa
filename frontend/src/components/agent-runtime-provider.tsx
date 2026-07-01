@@ -1,3 +1,16 @@
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import {
+	type LangChainMessage,
+	unstable_createLangGraphStream,
+	useLangGraphRuntime,
+} from "@assistant-ui/react-langgraph";
+import {
+	createContext,
+	type PropsWithChildren,
+	useContext,
+	useMemo,
+	useState,
+} from "react";
 import { ASSISTANT_ID, agentsClient } from "@/lib/agents";
 import { normalizeAvailableDocuments } from "@/lib/available-documents";
 import {
@@ -8,19 +21,6 @@ import {
 } from "@/lib/focus-documents";
 import { langGraphThreadListAdapter } from "@/lib/langgraph-thread-list-adapter";
 import type { AvailableDocuments } from "@/types";
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import {
-	type LangChainMessage,
-	unstable_createLangGraphStream,
-	useLangGraphRuntime,
-} from "@assistant-ui/react-langgraph";
-import {
-	type PropsWithChildren,
-	createContext,
-	useContext,
-	useMemo,
-	useState,
-} from "react";
 
 async function getFocusDocumentIds(
 	externalId: string,

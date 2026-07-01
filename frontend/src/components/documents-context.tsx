@@ -1,15 +1,6 @@
-import { useActiveThreadId } from "@/components/AgentRuntimeProvider";
-import { useDocuments } from "@/hooks/use-documents";
-import { agentsClient } from "@/lib/agents";
 import {
-	focusDocumentsStore,
-	persistFocusDocuments,
-	readFocusDocuments,
-} from "@/lib/focus-documents";
-import type { Document } from "@/types";
-import {
-	type PropsWithChildren,
 	createContext,
+	type PropsWithChildren,
 	useCallback,
 	useContext,
 	useEffect,
@@ -18,6 +9,15 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { useActiveThreadId } from "@/components/agent-runtime-provider";
+import { useDocuments } from "@/hooks/use-documents";
+import { agentsClient } from "@/lib/agents";
+import {
+	focusDocumentsStore,
+	persistFocusDocuments,
+	readFocusDocuments,
+} from "@/lib/focus-documents";
+import type { Document } from "@/types";
 import { removeDocumentFromStoredSelections } from "../hooks/use-document-selection";
 
 interface DocumentsContextValue {
