@@ -6,6 +6,7 @@ import { Client } from "@langchain/langgraph-sdk";
  * graph name doubles as the assistant id used when starting a run.
  */
 export const ASSISTANT_ID = "qa-agent";
+export const TITLE_ASSISTANT_ID = "title-agent";
 
 /**
  * Base URL of the Aegra server. The browser always talks to the current origin

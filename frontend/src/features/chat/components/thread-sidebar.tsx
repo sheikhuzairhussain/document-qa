@@ -1,6 +1,7 @@
 import {
 	AuiIf,
 	ThreadListPrimitive,
+	useAui,
 	useThreadListItem,
 	useThreadListItemRuntime,
 } from "@assistant-ui/react";
@@ -12,7 +13,7 @@ import {
 	SquarePen,
 	Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DestructiveConfirmDialog } from "@/components/ui/destructive-confirm-dialog";
 import {
@@ -40,6 +41,7 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { THREAD_TITLE_GENERATED_EVENT } from "@/features/chat/thread-list-events";
 import { cn, relativeTime } from "@/lib/utils";
 
 interface ThreadSidebarProps {
@@ -178,6 +180,19 @@ export function ThreadSidebar({
 	onResizeStart,
 	isResizing,
 }: ThreadSidebarProps) {
+	const aui = useAui();
+
+	useEffect(() => {
+		const refreshThreads = () => {
+			void aui.threads().reload();
+		};
+
+		window.addEventListener(THREAD_TITLE_GENERATED_EVENT, refreshThreads);
+		return () => {
+			window.removeEventListener(THREAD_TITLE_GENERATED_EVENT, refreshThreads);
+		};
+	}, [aui]);
+
 	return (
 		<Sidebar collapsible="offcanvas">
 			<SidebarHeader className="p-2">
