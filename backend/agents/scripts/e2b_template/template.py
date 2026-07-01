@@ -7,9 +7,9 @@ from pathlib import Path
 from e2b import Template
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _TEMPLATE_DIR.parents[2]
-_SKILLS_DIR = "backend/agents/src/qa_agent/skills"
-_SMOKE_CHECK = "backend/agents/e2b_template/smoke_check.py"
+_REPO_ROOT = _TEMPLATE_DIR.parents[3]
+_SKILLS_DIR = "backend/agents/qa_agent/skills"
+_SMOKE_CHECK = "backend/agents/scripts/e2b_template/smoke_check.py"
 
 _APT_PACKAGES = [
     "build-essential",

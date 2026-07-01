@@ -8,8 +8,8 @@ import structlog
 from langchain.agents.middleware import AgentMiddleware, AgentState, ModelRequest, ModelResponse
 from langchain_core.messages import SystemMessage
 
-from qa_agent.context import AgentContext, get_focus_document_ids
-from qa_agent.retrieval import DocumentInfo, get_documents
+from backend.agents.qa_agent.context import AgentContext, get_focus_document_ids
+from backend.lib.services.retrieval import DocumentInfo, get_documents
 
 logger = structlog.get_logger()
 
@@ -39,7 +39,7 @@ class FocusDocumentsMiddleware(AgentMiddleware[AgentState[object], AgentContext,
             return request
 
         docs = self._lookup_documents(focus_document_ids)
-        hidden_context = _format_hidden_context(focus_document_ids, docs)
+        hidden_context = format_hidden_focus_context(focus_document_ids, docs)
         current_system = request.system_prompt or ""
         system_content = (
             f"{current_system}\n\n{hidden_context}" if current_system else hidden_context
@@ -60,7 +60,7 @@ class FocusDocumentsMiddleware(AgentMiddleware[AgentState[object], AgentContext,
             return []
 
 
-def _format_hidden_context(
+def format_hidden_focus_context(
     document_ids: list[str],
     documents: list[DocumentInfo],
 ) -> str:

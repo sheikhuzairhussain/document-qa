@@ -15,7 +15,7 @@ MEMORY_MB = 4096
 
 
 def main() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[4]
     load_dotenv(repo_root / ".env")
 
     _required_env("E2B_API_KEY")

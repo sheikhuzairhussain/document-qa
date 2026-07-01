@@ -1,9 +1,9 @@
 {
   "name": "agents",
-  "dependencies": ["./backend/agents/src"],
+  "dependencies": ["."],
   "graphs": {
-    "qa-agent": "./backend/agents/src/qa_agent/graph.py:agent",
-    "title-agent": "./backend/agents/src/title_agent/graph.py:agent"
+    "qa-agent": "./backend/agents/qa_agent/graph.py:agent",
+    "title-agent": "./backend/agents/title_agent/graph.py:agent"
   },
   "env": ".env"
 }

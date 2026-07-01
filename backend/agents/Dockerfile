@@ -1,6 +1,6 @@
-# Aegra agent runtime. Builds from the repo root and installs the *shared* root
-# pyproject (which carries aegra-cli + deepagents) — agents has no pyproject of its own.
-# The shared aegra.json references ./backend/agents/src, so we mirror that layout in-container.
+# Aegra agent runtime. Builds from the repo root and installs the shared root
+# pyproject (which carries aegra-cli + deepagents). Agents import the shared
+# backend services/db package directly; only this folder has an agent image.
 #   build context: .            (repo root)
 #   dockerfile:    backend/agents/Dockerfile
 FROM python:3.12-slim-bookworm AS base
@@ -25,9 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies only (--no-install-project): the agent loads its graph via
-# aegra.json path injection, so it never imports the orbital-takehome package and
-# doesn't need backend/app/src copied in.
+# Install dependencies only (--no-install-project): source is copied below and
+# loaded by Aegra from aegra.json, while backend.* imports resolve via PYTHONPATH.
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --no-dev --no-install-project --compile-bytecode
 
@@ -44,13 +43,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /app/.venv /app/.venv
 
-# Mirror the repo-root layout: aegra.json at /app, graph source at /app/backend/agents/src.
+# Mirror the repo-root layout: aegra.json at /app, backend package at /app/backend.
 # In dev these are bind-mounted over by docker-compose; baked in for standalone runs.
 COPY aegra.json /app/aegra.json
-COPY backend/agents/src /app/backend/agents/src
+COPY backend/__init__.py /app/backend/__init__.py
+COPY backend/config.py /app/backend/config.py
+COPY backend/agents /app/backend/agents
+COPY backend/lib /app/backend/lib
 
 ENV PATH="/app/.venv/bin:$PATH" \
-    AEGRA_CONFIG=/app/aegra.json
+    AEGRA_CONFIG=/app/aegra.json \
+    PYTHONPATH=/app
 
 WORKDIR /app
 

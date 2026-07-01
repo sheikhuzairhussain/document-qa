@@ -44,12 +44,12 @@ GOOGLE_API_KEY=your_key_here
 ```
 just dev
 ```
-   This starts PostgreSQL, the FastAPI backend (port 8000), and the React frontend (port 5173).
-   Database migrations run automatically when the backend starts — no separate step needed.
+   This starts PostgreSQL, the FastAPI API (port 8000), and the React frontend (port 5173).
+   Database migrations run automatically when the API starts — no separate step needed.
 
 5. Open http://localhost:5173 in your browser.
 
-Your local `backend/app/src/` and `frontend/src/` directories are mounted into the containers —
+Your local `backend/` and `frontend/src/` directories are mounted into the containers —
 edit files normally on your machine and changes hot-reload automatically.
 
 ### Document ingestion & retrieval
@@ -57,11 +57,11 @@ edit files normally on your machine and changes hot-reload automatically.
 Uploaded PDFs are indexed by a background pipeline so the assistant can retrieve
 the relevant passages instead of being handed the whole document:
 
-1. **Upload** (`backend/app/.../services/document.py`) — the file is stored, the
+1. **Upload** (`backend/lib/services/document.py`) — the file is stored, the
    `documents` row is created with `status="pending"`, and an ingestion job is
    pushed onto a Redis-backed **RQ** queue. Upload does not parse or extract the
    PDF.
-2. **Worker** (`backend/app/.../services/ingestion.py`, the `worker` service) —
+2. **Worker** (`backend/lib/services/ingestion.py`, the `worker` service) —
    splits the PDF into single-page PDFs with **PyMuPDF**, extracts page text and
    block-level geometry, embeds each page with **Gemini Embedding 2**, and stores
    one row per page in `document_chunks`. Page embedding runs with 32 concurrent
@@ -72,7 +72,7 @@ the relevant passages instead of being handed the whole document:
 3. **Status** — `status`, `chunk_count`, and `error` are returned by the
    documents API and shown per-row in the UI (it polls while indexing), with a
    "Retry processing" action for failures.
-4. **Retrieval** — the `qa-agent` (`backend/agents/.../qa_agent/`) exposes a
+4. **Retrieval** — the `qa-agent` (`backend/agents/qa_agent/`) exposes a
    `search_documents` tool that runs **hybrid search** over `document_chunks`:
    dense similarity via **pgvectorscale** (StreamingDiskANN, `<=>`) fused with
    **pg_textsearch** BM25 keyword relevance (`<@>`) using **reciprocal rank
@@ -85,7 +85,7 @@ and pg_textsearch. `pg_textsearch` is enabled via `shared_preload_libraries` in
 The schema lives in migration `003`.
 
 New services in `docker-compose.yml`: `redis` (queue broker) and `worker` (the
-RQ consumer, sharing the backend image). `just dev` starts them with the rest.
+RQ consumer, sharing the API image). `just dev` starts them with the rest.
 
 ### Sample Documents
 
@@ -94,20 +94,22 @@ We've included sample legal documents in `sample-docs/` for testing.
 ### Project Structure
 
 - `frontend/` — React frontend (Vite + Tailwind + shadcn/Radix UI)
-- `backend/app/` — FastAPI backend (Python 3.12 + SQLAlchemy + PydanticAI)
-- `backend/agents/` — Aegra-served LangGraph agents (Python 3.12 + LangGraph)
+- `backend/api/` — FastAPI app and API container entrypoint
+- `backend/agents/` — Aegra-served LangGraph agents and agent container entrypoint
+- `backend/lib/db/` — SQLAlchemy models and sessions
+- `backend/lib/services/` — shared application services used by API, worker, and agents
 - `alembic/` — Database migrations
 - `data/` — Product analytics and customer feedback (for Part 2)
 - `sample-docs/` — Sample PDF documents for testing
 
 ### Useful Commands
 
-- `just dev` — Start full stack (Postgres + backend + frontend)
+- `just dev` — Start full stack (Postgres + API + frontend)
 - `just stop` — Stop all services
 - `just reset` — Stop everything and clear database
 - `just check` — Run all linters and type checks
 - `just fmt` — Format all code
 - `just db-init` — Run database migrations
 - `just db-shell` — Open a psql shell
-- `just shell-backend` — Shell into backend container
-- `just logs-backend` — Tail backend logs
+- `just shell-api` — Shell into API container
+- `just logs-api` — Tail API logs

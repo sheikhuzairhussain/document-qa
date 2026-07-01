@@ -21,7 +21,7 @@ setup:
 # Development
 # =============================================================================
 
-# Start the full stack (Postgres, backend, frontend, agents) with hot reload
+# Start the full stack (Postgres, API, frontend, agents) with hot reload
 dev:
     docker compose up
 
@@ -33,14 +33,17 @@ dev-detach:
 stop:
     docker compose down
 
-# Stop all services and remove database volumes (backend + agents)
+# Stop all services and remove database volumes (API + agents)
 reset:
     docker compose down -v
     @echo "All data cleared. Run 'just dev' to start fresh."
 
-# View backend logs
-logs-backend:
-    docker compose logs -f backend
+# View API logs
+logs-api:
+    docker compose logs -f api
+
+# Backward-compatible alias while muscle memory catches up.
+logs-backend: logs-api
 
 # View ingestion worker logs
 logs-worker:
@@ -60,16 +63,16 @@ logs:
 
 # Initialize / migrate database
 db-init:
-    docker compose exec backend uv run alembic upgrade head
+    docker compose exec api uv run alembic upgrade head
     @echo "Database initialised!"
 
 # Create a new migration
 db-migrate message:
-    docker compose exec backend uv run alembic revision --autogenerate -m "{{message}}"
+    docker compose exec api uv run alembic revision --autogenerate -m "{{message}}"
 
 # Apply pending migrations
 db-upgrade:
-    docker compose exec backend uv run alembic upgrade head
+    docker compose exec api uv run alembic upgrade head
 
 # Open psql shell
 db-shell:
@@ -88,20 +91,36 @@ agents-db-upgrade:
 # =============================================================================
 
 # Run all checks
-check: check-backend check-frontend
+check: check-api check-frontend
+
+# Run all tests
+test: test-api
 
 # Format all code
-fmt: fmt-backend fmt-frontend
+fmt: fmt-api fmt-frontend
 
 # Python checks
-check-backend:
-    docker compose exec backend uv run ruff check backend/app/src
-    docker compose exec backend uv run pyright backend/app/src
+check-api:
+    docker compose exec api uv run ruff check backend
+    docker compose exec api uv run pyright backend
+
+# Backward-compatible alias while muscle memory catches up.
+check-backend: check-api
+
+# Python tests
+test-api:
+    docker compose exec api uv run pytest -q
+
+# Backward-compatible alias while muscle memory catches up.
+test-backend: test-api
 
 # Format Python
-fmt-backend:
-    docker compose exec backend uv run ruff format backend/app/src
-    docker compose exec backend uv run ruff check --fix backend/app/src
+fmt-api:
+    docker compose exec api uv run ruff format backend
+    docker compose exec api uv run ruff check --fix backend
+
+# Backward-compatible alias while muscle memory catches up.
+fmt-backend: fmt-api
 
 # Frontend checks
 check-frontend:
@@ -115,9 +134,12 @@ fmt-frontend:
 # Utilities
 # =============================================================================
 
-# Shell into backend container
-shell-backend:
-    docker compose exec backend bash
+# Shell into API container
+shell-api:
+    docker compose exec api bash
+
+# Backward-compatible alias while muscle memory catches up.
+shell-backend: shell-api
 
 # Shell into frontend container
 shell-frontend:
@@ -129,7 +151,7 @@ shell-agents:
 
 # Install a new Python dependency
 add-dep package:
-    docker compose exec backend uv add {{package}}
+    docker compose exec api uv add {{package}}
 
 # Install a new frontend dependency
 add-dep-frontend package:

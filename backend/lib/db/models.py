@@ -7,7 +7,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from takehome.config import settings
+from backend.config import settings
 
 
 class Base(DeclarativeBase):

@@ -5,7 +5,7 @@ services:
     # so we pass shared_preload_libraries explicitly (keeping timescaledb's own).
     # Storage is ephemeral: no volume is mounted, so the cluster lives in the
     # container's own filesystem and is discarded when the container is removed
-    # (migrations re-run on backend startup, so a fresh DB is fine for dev).
+    # (migrations re-run on API startup, so a fresh DB is fine for dev).
     image: timescale/timescaledb-ha:pg17
     command: ["postgres", "-c", "shared_preload_libraries=timescaledb,pg_textsearch"]
     environment:
@@ -30,14 +30,14 @@ services:
       timeout: 5s
       retries: 10
 
-  backend:
+  api:
     build:
       context: .
-      dockerfile: backend/app/Dockerfile
+      dockerfile: backend/api/Dockerfile
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ./backend/app/src:/app/backend/app/src
+      - ./backend:/app/backend
       - ./alembic:/app/alembic
       - ./uploads:/app/uploads
       - ./pyproject.toml:/app/pyproject.toml
@@ -51,16 +51,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: uv run uvicorn takehome.web.app:app --reload --host 0.0.0.0 --port 8000
+    command: uv run uvicorn backend.api.app:app --reload --host 0.0.0.0 --port 8000
 
-  # Ingestion worker: same image as backend, consumes the RQ "ingestion" queue
+  # Ingestion worker: same image as the API, consumes the RQ "ingestion" queue
   # (PyMuPDF page extraction -> Gemini page-PDF embeddings -> document_chunks).
   worker:
     build:
       context: .
-      dockerfile: backend/app/Dockerfile
+      dockerfile: backend/api/Dockerfile
     volumes:
-      - ./backend/app/src:/app/backend/app/src
+      - ./backend:/app/backend
       - ./alembic:/app/alembic
       - ./uploads:/app/uploads
       - ./pyproject.toml:/app/pyproject.toml
@@ -91,7 +91,7 @@ services:
       - ./frontend/tsconfig.json:/app/tsconfig.json
       - ./frontend/biome.json:/app/biome.json
     depends_on:
-      - backend
+      - api
 
   # --- Aegra agent stack (isolated image + database) ---------------------------
   agents-db:
@@ -117,11 +117,11 @@ services:
     ports:
       - "${AEGRA_PORT:-2026}:2026"
     volumes:
-      - ./backend/agents/src:/app/backend/agents/src
+      - ./backend:/app/backend
       - ./aegra.json:/app/aegra.json
     env_file: .env
     environment:
-      # Explicit DATABASE_URL wins over the backend's values inherited from .env,
+      # Explicit DATABASE_URL wins over the API values inherited from .env,
       # pointing Aegra at its own isolated database.
       DATABASE_URL: postgresql+asyncpg://agents:agents@agents-db:5432/aegra
       AEGRA_CONFIG: /app/aegra.json

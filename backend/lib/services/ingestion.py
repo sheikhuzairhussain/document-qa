@@ -16,15 +16,15 @@ from dataclasses import dataclass
 import fitz
 import structlog
 
-from takehome.db.models import (
+from backend.lib.db.models import (
     DOCUMENT_STATUS_COMPLETED,
     DOCUMENT_STATUS_FAILED,
     DOCUMENT_STATUS_PROCESSING,
     Document,
     DocumentChunk,
 )
-from takehome.db.session import sync_session
-from takehome.services.embeddings import embed_pdf_pages
+from backend.lib.db.session import sync_session
+from backend.lib.services.embeddings import embed_pdf_pages
 
 logger = structlog.get_logger()
 
@@ -69,7 +69,7 @@ def _single_page_pdf_bytes(doc: fitz.Document, page_index: int) -> bytes:
         single_page.close()
 
 
-def _extract_pages(file_path: str) -> list[PagePayload]:
+def extract_pdf_pages(file_path: str) -> list[PagePayload]:
     doc = fitz.open(file_path)
     try:
         pages: list[PagePayload] = []
@@ -88,7 +88,7 @@ def _extract_pages(file_path: str) -> list[PagePayload]:
         doc.close()
 
 
-def _document_text(pages: list[PagePayload]) -> str | None:
+def document_text(pages: list[PagePayload]) -> str | None:
     page_texts = [
         f"--- Page {page.page_no} ---\n{page.text}" for page in pages if page.text.strip()
     ]
@@ -112,7 +112,7 @@ def process_document(document_id: str) -> None:
         file_path = document.file_path
         log.info("Starting ingestion", file_path=file_path)
 
-        pages = _extract_pages(file_path)
+        pages = extract_pdf_pages(file_path)
         if not pages:
             raise ValueError("PDF has no pages.")
 
@@ -134,7 +134,7 @@ def process_document(document_id: str) -> None:
             )
 
         document.page_count = len(pages)
-        document.extracted_text = _document_text(pages)
+        document.extracted_text = document_text(pages)
         document.chunk_count = len(pages)
         document.status = DOCUMENT_STATUS_COMPLETED
         session.commit()

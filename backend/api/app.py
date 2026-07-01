@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from alembic import command
-from takehome.config import settings
-from takehome.web.routers import documents
+from backend.api.routers import documents
+from backend.config import settings
 
 logger = structlog.get_logger()
 

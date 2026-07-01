@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://orbital:orbital@db:5432/orbital_takehome"
+    rag_database_url: str | None = None
     anthropic_api_key: str = ""
     google_api_key: str = ""
     upload_dir: str = "uploads"

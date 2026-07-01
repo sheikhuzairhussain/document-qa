@@ -4,13 +4,13 @@ import structlog
 from redis import Redis
 from rq import Queue
 
-from takehome.config import settings
+from backend.config import settings
 
 logger = structlog.get_logger()
 
 # The job function is referenced by dotted path rather than imported, keeping
 # enqueueing cheap and avoiding worker-only ingestion imports in the API path.
-INGESTION_JOB = "takehome.services.ingestion.process_document"
+INGESTION_JOB = "backend.lib.services.ingestion.process_document"
 QUEUE_NAME = "ingestion"
 
 _redis: Redis | None = None

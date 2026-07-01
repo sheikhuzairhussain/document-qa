@@ -8,7 +8,7 @@ Runtime middleware must not copy skills into E2B sandboxes.
 Set `E2B_API_KEY` and build the template:
 
 ```bash
-uv run python backend/agents/e2b_template/build.py
+uv run python backend/agents/scripts/e2b_template/build.py
 ```
 
 The template alias is fixed in code as `qa-agent-sandbox`.

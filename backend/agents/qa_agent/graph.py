@@ -1,10 +1,10 @@
 from deepagents import create_deep_agent
 from langchain_core.runnables import RunnableConfig
 
-from qa_agent.context import AgentContext
-from qa_agent.middleware import FocusDocumentsMiddleware
-from qa_agent.sandbox import get_sandbox_backend, get_thread_id
-from qa_agent.tools import get_download_url, read_document, search_documents
+from backend.agents.qa_agent.context import AgentContext
+from backend.agents.qa_agent.middleware import FocusDocumentsMiddleware
+from backend.agents.qa_agent.sandbox import get_sandbox_backend, get_thread_id
+from backend.agents.qa_agent.tools import get_download_url, read_document, search_documents
 
 INSTRUCTIONS = """\
 You are a document Q&A assistant for commercial real estate lawyers reviewing \

@@ -1,23 +1,19 @@
-"""Hybrid retrieval for the qa-agent.
+"""Hybrid document retrieval shared by API-adjacent services and agents.
 
-The agent runs in its own container against its own (Aegra) database, but the
-document chunks live in the *main* application database. This module connects to
-that database directly (sync psycopg) and runs hybrid search:
+Agents run against their own orchestration database, while document chunks live
+in the main application database. This service connects to that document store
+directly and runs hybrid search:
 
 * dense  — pgvectorscale StreamingDiskANN over ``embedding`` (cosine ``<=>``), and
 * sparse — pg_textsearch BM25 over ``content`` (the ``<@>`` operator),
 
 fused with reciprocal rank fusion (RRF). This mirrors Timescale's reference
 hybrid-search query.
-
-Self-contained on purpose: the agent package can't import ``takehome``, so the
-embedding call and SQL are reimplemented here against environment config only.
 """
 
 from __future__ import annotations
 
 import math
-import os
 from dataclasses import dataclass
 from typing import Final
 
@@ -25,6 +21,8 @@ from google import genai
 from google.genai import types
 from psycopg import Connection
 from psycopg.rows import DictRow, dict_row
+
+from backend.config import settings
 
 # RRF constant. 60 is the canonical default from the original RRF paper and the
 # value Timescale uses in its hybrid-search example.
@@ -116,8 +114,8 @@ class EmbeddingSettings:
 
 def _embedding_settings() -> EmbeddingSettings:
     return EmbeddingSettings(
-        model=os.environ.get("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
-        dimensions=int(os.environ.get("EMBEDDING_DIM", str(DEFAULT_EMBEDDING_DIM))),
+        model=settings.embedding_model or DEFAULT_EMBEDDING_MODEL,
+        dimensions=settings.embedding_dim or DEFAULT_EMBEDDING_DIM,
     )
 
 
@@ -142,11 +140,11 @@ def _embed_query(text: str) -> str:
                 output_dimensionality=settings.dimensions,
             ),
         )
-    embedding = _embedding_values(response, settings)
+    embedding = embedding_values(response, settings)
     return _vector_literal(embedding)
 
 
-def _embedding_values(
+def embedding_values(
     response: types.EmbedContentResponse,
     settings: EmbeddingSettings,
 ) -> list[float]:
@@ -174,8 +172,8 @@ def _vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(str(value) for value in vector) + "]"
 
 
-def _database_url() -> str:
-    url = os.environ.get("RAG_DATABASE_URL")
+def database_url() -> str:
+    url = settings.rag_database_url
     if not url:
         raise RuntimeError(
             "RAG_DATABASE_URL is not set; the qa-agent needs it to reach the "
@@ -207,7 +205,7 @@ def hybrid_search(
         "limit": limit,
     }
 
-    with Connection[DictRow].connect(_database_url(), row_factory=dict_row) as conn:
+    with Connection[DictRow].connect(database_url(), row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(_HYBRID_SQL, params)
             rows = cur.fetchall()
@@ -232,7 +230,7 @@ def get_documents(document_ids: list[str]) -> list[DocumentInfo]:
     if not document_ids:
         return []
 
-    with Connection[DictRow].connect(_database_url(), row_factory=dict_row) as conn:
+    with Connection[DictRow].connect(database_url(), row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -259,7 +257,7 @@ def get_documents(document_ids: list[str]) -> list[DocumentInfo]:
 
 def get_document_chunks(document_id: str) -> list[DocumentChunkText]:
     """Fetch all indexed chunks for a document in citation-friendly order."""
-    with Connection[DictRow].connect(_database_url(), row_factory=dict_row) as conn:
+    with Connection[DictRow].connect(database_url(), row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """

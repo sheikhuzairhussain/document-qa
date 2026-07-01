@@ -7,7 +7,7 @@ import structlog
 from google import genai
 from google.genai import types
 
-from takehome.config import settings
+from backend.config import settings
 
 logger = structlog.get_logger()
 
@@ -34,7 +34,7 @@ def _normalize(vector: list[float]) -> list[float]:
     return [x / norm for x in vector]
 
 
-def _embedding_values(response: types.EmbedContentResponse) -> list[float]:
+def embedding_values(response: types.EmbedContentResponse) -> list[float]:
     embeddings = response.embeddings or []
     if not embeddings:
         raise RuntimeError("Gemini returned no embedding for input.")
@@ -61,7 +61,7 @@ def _embed_pdf_page(client: genai.Client, pdf_bytes: bytes) -> list[float]:
             output_dimensionality=settings.embedding_dim,
         ),
     )
-    return _embedding_values(response)
+    return embedding_values(response)
 
 
 def embed_pdf_pages(page_pdfs: list[bytes]) -> list[list[float]]:
@@ -106,4 +106,4 @@ def embed_query(text: str) -> list[float]:
             output_dimensionality=settings.embedding_dim,
         ),
     )
-    return _embedding_values(response)
+    return embedding_values(response)

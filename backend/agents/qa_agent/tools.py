@@ -10,21 +10,21 @@ from e2b import FileNotFoundException, FileType, InvalidArgumentException, Sandb
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolRuntime
 
-from qa_agent.context import (
+from backend.agents.qa_agent.context import (
     SELECT_ALL_DOCUMENTS,
     AgentContext,
     get_available_documents,
 )
-from qa_agent.retrieval import (
+from backend.agents.qa_agent.sandbox import (
+    DOWNLOAD_URL_EXPIRATION_SECONDS,
+    get_sandbox,
+    get_thread_id,
+)
+from backend.lib.services.retrieval import (
     DocumentChunkText,
     RetrievedChunk,
     get_document_chunks,
     hybrid_search,
-)
-from qa_agent.sandbox import (
-    DOWNLOAD_URL_EXPIRATION_SECONDS,
-    get_sandbox,
-    get_thread_id,
 )
 
 logger = structlog.get_logger()
@@ -72,7 +72,7 @@ def _source_chunk(chunk: RetrievedChunk | DocumentChunkText) -> DocumentSourceCh
     }
 
 
-def _artifact_for_chunks(
+def document_sources_artifact(
     chunks: list[RetrievedChunk] | list[DocumentChunkText],
 ) -> DocumentSourcesArtifact:
     return {
@@ -81,7 +81,7 @@ def _artifact_for_chunks(
     }
 
 
-def _download_url_artifact(
+def download_url_artifact(
     *,
     file_path: str,
     url: str | None = None,
@@ -119,7 +119,7 @@ def _format_source_header(
     )
 
 
-def _format_chunks(chunks: list[RetrievedChunk]) -> str:
+def format_retrieved_chunks(chunks: list[RetrievedChunk]) -> str:
     """Render retrieved chunks as a citation-friendly string for the model."""
     if not chunks:
         return (
@@ -138,7 +138,7 @@ def _format_chunks(chunks: list[RetrievedChunk]) -> str:
     return "\n\n".join(blocks)
 
 
-def _format_document_chunks(chunks: list[DocumentChunkText]) -> str:
+def format_document_chunks(chunks: list[DocumentChunkText]) -> str:
     """Render one document's chunks as page-ordered citeable source blocks."""
     if not chunks:
         return (
@@ -215,7 +215,7 @@ def search_documents(
         effective_document_ids=effective_document_ids,
         results=len(chunks),
     )
-    return _format_chunks(chunks), _artifact_for_chunks(chunks)
+    return format_retrieved_chunks(chunks), document_sources_artifact(chunks)
 
 
 @tool(parse_docstring=True, response_format="content_and_artifact")
@@ -248,7 +248,7 @@ def read_document(
         document_id=document_id,
         chunks=len(chunks),
     )
-    return _format_document_chunks(chunks), _artifact_for_chunks(chunks)
+    return format_document_chunks(chunks), document_sources_artifact(chunks)
 
 
 @tool(parse_docstring=True, response_format="content_and_artifact")
@@ -265,10 +265,10 @@ def get_download_url(
         file_path: Path to the file inside the E2B sandbox.
     """
     try:
-        normalized_path = _normalize_sandbox_file_path(file_path)
+        normalized_path = normalize_sandbox_file_path(file_path)
     except ValueError as exc:
         message = str(exc)
-        return message, _download_url_artifact(file_path=file_path, error=message)
+        return message, download_url_artifact(file_path=file_path, error=message)
 
     thread_id = get_thread_id(runtime.config)
     if thread_id is None:
@@ -276,7 +276,7 @@ def get_download_url(
             "No sandbox is available for this run, so a download URL cannot be "
             "created. Run this tool only after sandbox-backed file work."
         )
-        return message, _download_url_artifact(file_path=normalized_path, error=message)
+        return message, download_url_artifact(file_path=normalized_path, error=message)
 
     try:
         sandbox = get_sandbox(thread_id)
@@ -285,7 +285,7 @@ def get_download_url(
             message = f"{normalized_path} is a directory. Provide a file path instead."
             return (
                 message,
-                _download_url_artifact(file_path=normalized_path, error=message),
+                download_url_artifact(file_path=normalized_path, error=message),
             )
 
         url = sandbox.download_url(
@@ -294,7 +294,7 @@ def get_download_url(
         )
     except FileNotFoundException:
         message = f"{normalized_path} does not exist in the sandbox."
-        return message, _download_url_artifact(file_path=normalized_path, error=message)
+        return message, download_url_artifact(file_path=normalized_path, error=message)
     except (InvalidArgumentException, SandboxException, RuntimeError) as exc:
         message = f"Could not create a download URL for {normalized_path}: {exc}"
         logger.warning(
@@ -302,7 +302,7 @@ def get_download_url(
             file_path=normalized_path,
             error=str(exc),
         )
-        return message, _download_url_artifact(file_path=normalized_path, error=message)
+        return message, download_url_artifact(file_path=normalized_path, error=message)
 
     logger.info(
         "sandbox_download_url_created",
@@ -316,7 +316,7 @@ def get_download_url(
             f"download link from the tool artifact. Do not include the URL in "
             f"the assistant response text."
         ),
-        _download_url_artifact(file_path=normalized_path, url=url),
+        download_url_artifact(file_path=normalized_path, url=url),
     )
 
 
@@ -348,7 +348,7 @@ def _is_document_available(
     return document_id in available_documents
 
 
-def _normalize_sandbox_file_path(file_path: str) -> str:
+def normalize_sandbox_file_path(file_path: str) -> str:
     stripped_path = file_path.strip()
     if not stripped_path:
         msg = "Provide a non-empty sandbox file path."
