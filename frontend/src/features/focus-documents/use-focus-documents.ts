@@ -6,7 +6,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { useActiveThreadId } from "@/features/chat/active-thread-context";
+import { useActiveThreadId } from "@/features/chat/chat-session-store";
 import {
 	focusDocumentsStore,
 	persistFocusDocuments,

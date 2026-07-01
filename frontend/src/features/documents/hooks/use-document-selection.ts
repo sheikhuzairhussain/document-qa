@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+	parseAvailableDocuments,
+	parseDocumentSelection,
+} from "@/features/documents/document-context-schemas";
 import type { AvailableDocuments, DocSelection } from "@/types";
 
 const DEFAULT_SELECTION: DocSelection = { library: [] };
@@ -17,21 +21,12 @@ function storageKey(conversationId: string): string {
 	return `${STORAGE_PREFIX}${conversationId}`;
 }
 
-function isAvailableDocuments(value: unknown): value is AvailableDocuments {
-	return (
-		value === "all" ||
-		(Array.isArray(value) && value.every((item) => typeof item === "string"))
-	);
-}
-
 function loadSelection(conversationId: string | null): DocSelection {
 	if (!conversationId) return DEFAULT_SELECTION;
 	try {
 		const raw = localStorage.getItem(storageKey(conversationId));
 		if (!raw) return DEFAULT_SELECTION;
-		const parsed = JSON.parse(raw) as Partial<DocSelection>;
-		if (!isAvailableDocuments(parsed.library)) return DEFAULT_SELECTION;
-		return { library: parsed.library };
+		return parseDocumentSelection(JSON.parse(raw), DEFAULT_SELECTION);
 	} catch {
 		return DEFAULT_SELECTION;
 	}
@@ -68,9 +63,11 @@ export function removeDocumentFromStoredSelections(documentId: string): void {
 			if (!key?.startsWith(STORAGE_PREFIX)) continue;
 			const raw = localStorage.getItem(key);
 			if (!raw) continue;
-			const parsed = JSON.parse(raw) as Partial<DocSelection>;
-			if (!isAvailableDocuments(parsed.library)) continue;
-			const next = removeFromSelection({ library: parsed.library }, documentId);
+			const library = parseAvailableDocuments(
+				(JSON.parse(raw) as { library?: unknown }).library,
+				[],
+			);
+			const next = removeFromSelection({ library }, documentId);
 			localStorage.setItem(key, JSON.stringify(next));
 		}
 	} catch {

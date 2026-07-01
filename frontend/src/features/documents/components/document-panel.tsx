@@ -1,7 +1,7 @@
-import { type ChangeEvent, useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { DocumentSelection } from "@/features/documents/hooks/use-document-selection";
+import { usePdfUploadDropzone } from "@/features/documents/hooks/use-pdf-upload-dropzone";
 import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
-import { getPdfFiles } from "@/lib/files";
 import type { Document } from "@/types";
 import { DocumentSection } from "./document-section";
 import { SectionUploadButton } from "./section-upload-button";
@@ -38,10 +38,16 @@ export function DocumentPanel({
 	onDeleteDocument,
 	onReprocessDocument,
 }: DocumentPanelProps) {
-	const focusUploadRef = useRef<HTMLInputElement>(null);
-	const libraryUploadRef = useRef<HTMLInputElement>(null);
 	const { openDocument } = usePdfViewer();
 	const { width, dragging, handleMouseDown } = useResizableDocumentPanel();
+	const focusUpload = usePdfUploadDropzone({
+		disabled: uploading,
+		onUpload,
+	});
+	const libraryUpload = usePdfUploadDropzone({
+		disabled: uploading,
+		onUpload: onUploadToLibrary,
+	});
 
 	const { libraryAll, librarySelected, toggleLibraryAll, toggleLibraryDoc } =
 		selection;
@@ -101,26 +107,6 @@ export function DocumentPanel({
 		[openDocument],
 	);
 
-	const handleFocusUploadChange = useCallback(
-		(e: ChangeEvent<HTMLInputElement>) => {
-			for (const file of getPdfFiles(e.target.files)) {
-				void onUpload(file);
-			}
-			e.target.value = "";
-		},
-		[onUpload],
-	);
-
-	const handleLibraryUploadChange = useCallback(
-		(e: ChangeEvent<HTMLInputElement>) => {
-			for (const file of getPdfFiles(e.target.files)) {
-				void onUploadToLibrary(file);
-			}
-			e.target.value = "";
-		},
-		[onUploadToLibrary],
-	);
-
 	return (
 		<div
 			style={{ width }}
@@ -138,20 +124,16 @@ export function DocumentPanel({
 			{/* Body */}
 			<div className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
 				<input
-					ref={focusUploadRef}
-					type="file"
-					accept=".pdf,application/pdf"
-					multiple
-					className="hidden"
-					onChange={handleFocusUploadChange}
+					{...focusUpload.getInputProps({
+						"aria-label": "Upload to focus documents",
+						className: "hidden",
+					})}
 				/>
 				<input
-					ref={libraryUploadRef}
-					type="file"
-					accept=".pdf,application/pdf"
-					multiple
-					className="hidden"
-					onChange={handleLibraryUploadChange}
+					{...libraryUpload.getInputProps({
+						"aria-label": "Upload to library documents",
+						className: "hidden",
+					})}
 				/>
 				{error && <p className="px-2 text-xs text-destructive">{error}</p>}
 
@@ -164,7 +146,7 @@ export function DocumentPanel({
 						<SectionUploadButton
 							uploading={uploading}
 							ariaLabel="Upload to focus documents"
-							onClick={() => focusUploadRef.current?.click()}
+							onClick={focusUpload.open}
 						/>
 					}
 					onPreview={handlePreview}
@@ -187,7 +169,7 @@ export function DocumentPanel({
 						<SectionUploadButton
 							uploading={uploading}
 							ariaLabel="Upload to library documents"
-							onClick={() => libraryUploadRef.current?.click()}
+							onClick={libraryUpload.open}
 						/>
 					}
 					onToggleAll={toggleLibraryAll}

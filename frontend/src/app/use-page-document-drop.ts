@@ -1,11 +1,11 @@
 import { type DragEvent as ReactDragEvent, useCallback, useState } from "react";
-import { getPdfFiles } from "@/lib/files";
+import { type DropEvent, useDropzone } from "react-dropzone";
+import {
+	PDF_DROPZONE_ACCEPT,
+	uploadAcceptedPdfs,
+} from "@/features/documents/hooks/use-pdf-upload-dropzone";
 
 export type DocumentDropIntent = "focus" | "library";
-
-function hasFileDrag(dataTransfer: DataTransfer): boolean {
-	return Array.from(dataTransfer.types).includes("Files");
-}
 
 function documentDropIntentFromTarget(
 	target: EventTarget | null,
@@ -16,6 +16,10 @@ function documentDropIntentFromTarget(
 	return intent === "focus" || intent === "library" ? intent : null;
 }
 
+function targetFromDropEvent(event: DropEvent): EventTarget | null {
+	return Array.isArray(event) ? null : event.target;
+}
+
 export function usePageDocumentDrop({
 	onUpload,
 	onUploadToLibrary,
@@ -23,67 +27,45 @@ export function usePageDocumentDrop({
 	onUpload: (file: File) => void | Promise<void>;
 	onUploadToLibrary: (file: File) => void | Promise<void>;
 }) {
-	const [dragDepth, setDragDepth] = useState(0);
 	const [activeIntent, setActiveIntent] = useState<DocumentDropIntent | null>(
 		null,
 	);
-	const isDragging = dragDepth > 0;
 
-	const handleDragEnter = useCallback((e: ReactDragEvent) => {
-		if (!hasFileDrag(e.dataTransfer)) return;
-		e.preventDefault();
-		e.stopPropagation();
-		setDragDepth(1);
-	}, []);
-
-	const handleDragOver = useCallback((e: ReactDragEvent) => {
-		if (!hasFileDrag(e.dataTransfer)) return;
-		e.preventDefault();
-		e.stopPropagation();
-		e.dataTransfer.dropEffect = "copy";
+	const handleDragOver = useCallback((e: ReactDragEvent<HTMLElement>) => {
 		setActiveIntent(documentDropIntentFromTarget(e.target));
 	}, []);
 
-	const handleDragLeave = useCallback((e: ReactDragEvent) => {
-		if (!hasFileDrag(e.dataTransfer)) return;
-		e.preventDefault();
-		e.stopPropagation();
-		const nextTarget = e.relatedTarget;
-		if (nextTarget instanceof Node && e.currentTarget.contains(nextTarget)) {
-			return;
-		}
-		setDragDepth(0);
+	const handleDragLeave = useCallback(() => {
 		setActiveIntent(null);
 	}, []);
 
-	const handleDrop = useCallback(
-		(e: ReactDragEvent) => {
-			if (!hasFileDrag(e.dataTransfer)) return;
-			e.preventDefault();
-			e.stopPropagation();
-			setDragDepth(0);
+	const handleDropAccepted = useCallback(
+		(files: File[], event: DropEvent) => {
 			setActiveIntent(null);
-
-			const files = getPdfFiles(e.dataTransfer.files);
-			if (files.length === 0) return;
-
-			const intent = documentDropIntentFromTarget(e.target) ?? "focus";
+			const intent =
+				documentDropIntentFromTarget(targetFromDropEvent(event)) ?? "focus";
 			const uploadTarget = intent === "library" ? onUploadToLibrary : onUpload;
-			for (const file of files) {
-				void uploadTarget(file);
-			}
+			uploadAcceptedPdfs(files, uploadTarget);
 		},
 		[onUpload, onUploadToLibrary],
 	);
 
+	const dropzone = useDropzone({
+		accept: PDF_DROPZONE_ACCEPT,
+		multiple: true,
+		noClick: true,
+		noKeyboard: true,
+		onDropAccepted: handleDropAccepted,
+		onDropRejected: () => setActiveIntent(null),
+	});
+
 	return {
-		isDragging,
+		isDragging: dropzone.isDragActive,
 		activeIntent,
-		dragHandlers: {
-			onDragEnterCapture: handleDragEnter,
-			onDragOverCapture: handleDragOver,
-			onDragLeaveCapture: handleDragLeave,
-			onDropCapture: handleDrop,
-		},
+		rootProps: dropzone.getRootProps({
+			className: "min-h-svh",
+			onDragLeave: handleDragLeave,
+			onDragOver: handleDragOver,
+		}),
 	};
 }

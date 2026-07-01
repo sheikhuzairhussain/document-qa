@@ -9,7 +9,6 @@ import {
 	SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ActiveThreadProvider } from "@/features/chat/active-thread-context";
 import { AgentRuntimeProvider } from "@/features/chat/agent-runtime-provider";
 import { Thread } from "@/features/chat/components/thread";
 import { ThreadSidebar } from "@/features/chat/components/thread-sidebar";
@@ -26,11 +25,9 @@ import { cn } from "@/lib/utils";
 export default function App() {
 	return (
 		<TooltipProvider delayDuration={200}>
-			<ActiveThreadProvider>
-				<DocumentsProvider>
-					<Workspace />
-				</DocumentsProvider>
-			</ActiveThreadProvider>
+			<DocumentsProvider>
+				<Workspace />
+			</DocumentsProvider>
 		</TooltipProvider>
 	);
 }
@@ -91,54 +88,55 @@ function Workspace() {
 	return (
 		<AgentRuntimeProvider availableDocuments={availableDocuments}>
 			<PdfViewerProvider>
-				<SidebarProvider
-					style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
-					className={cn(
-						"relative",
-						isResizing &&
-							"[&_[data-slot=sidebar-gap]]:transition-none [&_[data-slot=sidebar-container]]:transition-none",
-					)}
-					{...pageDrop.dragHandlers}
-				>
-					{pageDrop.isDragging && (
-						<DocumentDropOverlay activeIntent={pageDrop.activeIntent} />
-					)}
-					<ThreadSidebar
-						onResizeStart={handleResizeStart}
-						isResizing={isResizing}
-					/>
+				<div {...pageDrop.rootProps}>
+					<SidebarProvider
+						style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+						className={cn(
+							"relative",
+							isResizing &&
+								"[&_[data-slot=sidebar-gap]]:transition-none [&_[data-slot=sidebar-container]]:transition-none",
+						)}
+					>
+						{pageDrop.isDragging && (
+							<DocumentDropOverlay activeIntent={pageDrop.activeIntent} />
+						)}
+						<ThreadSidebar
+							onResizeStart={handleResizeStart}
+							isResizing={isResizing}
+						/>
 
-					<SidebarInset className="h-screen min-h-0 overflow-hidden">
-						<header className="flex h-12 shrink-0 items-center gap-2 border-b border-neutral-200 bg-white px-3">
-							<SidebarTrigger className="-ml-1" />
-							<Separator orientation="vertical" />
-							<h1 className="truncate text-sm font-medium text-neutral-700">
-								Document Q&amp;A
-							</h1>
-						</header>
+						<SidebarInset className="h-screen min-h-0 overflow-hidden">
+							<header className="flex h-12 shrink-0 items-center gap-2 border-b border-neutral-200 bg-white px-3">
+								<SidebarTrigger className="-ml-1" />
+								<Separator orientation="vertical" />
+								<h1 className="truncate text-sm font-medium text-neutral-700">
+									Document Q&amp;A
+								</h1>
+							</header>
 
-						<div className="flex min-h-0 flex-1">
-							<main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-								<Thread />
-							</main>
+							<div className="flex min-h-0 flex-1">
+								<main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+									<Thread />
+								</main>
 
-							<DocumentPanel
-								focusDocuments={focusDocuments}
-								libraryDocuments={libraryDocuments}
-								loading={documentsLoading}
-								uploading={uploading}
-								error={documentsError}
-								selection={selection}
-								onUpload={handleUpload}
-								onUploadToLibrary={handleLibraryUpload}
-								onAddToFocus={addToFocus}
-								onRemoveFromFocus={removeFromFocus}
-								onDeleteDocument={deleteDocument}
-								onReprocessDocument={reprocessDocument}
-							/>
-						</div>
-					</SidebarInset>
-				</SidebarProvider>
+								<DocumentPanel
+									focusDocuments={focusDocuments}
+									libraryDocuments={libraryDocuments}
+									loading={documentsLoading}
+									uploading={uploading}
+									error={documentsError}
+									selection={selection}
+									onUpload={handleUpload}
+									onUploadToLibrary={handleLibraryUpload}
+									onAddToFocus={addToFocus}
+									onRemoveFromFocus={removeFromFocus}
+									onDeleteDocument={deleteDocument}
+									onReprocessDocument={reprocessDocument}
+								/>
+							</div>
+						</SidebarInset>
+					</SidebarProvider>
+				</div>
 			</PdfViewerProvider>
 		</AgentRuntimeProvider>
 	);

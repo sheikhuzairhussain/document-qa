@@ -4,7 +4,7 @@ import {
 	useLangGraphRuntime,
 } from "@assistant-ui/react-langgraph";
 import { type PropsWithChildren, useMemo } from "react";
-import { useSetActiveThreadId } from "@/features/chat/active-thread-context";
+import { useSetActiveThreadId } from "@/features/chat/chat-session-store";
 import { createDocumentScopedClient } from "@/features/chat/document-scoped-client";
 import { langGraphThreadListAdapter } from "@/features/chat/langgraph-thread-list-adapter";
 import { loadThread } from "@/features/chat/thread-loader";

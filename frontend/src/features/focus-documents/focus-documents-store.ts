@@ -1,4 +1,5 @@
 import type { Thread } from "@langchain/langgraph-sdk";
+import { parseDocumentIdList } from "@/features/documents/document-context-schemas";
 import { agentsClient } from "@/lib/agents";
 
 /**
@@ -171,10 +172,7 @@ export const focusDocumentsStore = new FocusDocumentsStore();
 
 /** Read the `focus_documents` list off an Aegra thread's metadata. */
 export function readFocusDocuments(thread: Thread): string[] {
-	const value = thread.metadata?.[FOCUS_DOCUMENTS_KEY];
-	return Array.isArray(value)
-		? value.filter((id): id is string => typeof id === "string")
-		: [];
+	return parseDocumentIdList(thread.metadata?.[FOCUS_DOCUMENTS_KEY]);
 }
 
 /** Build the metadata patch that records a chat's focus documents. */

@@ -1,4 +1,5 @@
 import { normalizeAvailableDocuments } from "@/features/documents/available-documents";
+import { parseUnknownRecord } from "@/features/documents/document-context-schemas";
 import {
 	AVAILABLE_DOCUMENTS_KEY,
 	FOCUS_DOCUMENTS_KEY,
@@ -9,10 +10,6 @@ import { agentsClient } from "@/lib/agents";
 import type { AvailableDocuments } from "@/types";
 
 type RunsStream = typeof agentsClient.runs.stream;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
 
 async function getFocusDocumentIds(
 	externalId: string,
@@ -52,10 +49,8 @@ export function createDocumentScopedClient(
 					typeof threadId === "string"
 						? await getFocusDocumentIds(threadId)
 						: [];
-				const payloadRecord = isRecord(payload) ? payload : {};
-				const context = isRecord(payloadRecord.context)
-					? payloadRecord.context
-					: {};
+				const payloadRecord = parseUnknownRecord(payload);
+				const context = parseUnknownRecord(payloadRecord.context);
 				const scopedPayload = {
 					...payloadRecord,
 					context: {

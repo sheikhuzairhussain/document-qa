@@ -1,11 +1,11 @@
 import { AuiIf, ComposerPrimitive } from "@assistant-ui/react";
 import { PaperclipIcon, SendHorizontalIcon, SquareIcon } from "lucide-react";
-import { type ChangeEvent, type FC, useRef } from "react";
+import type { FC } from "react";
 import { ComposerAttachments } from "@/components/assistant-ui/attachment";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { useDocumentsContext } from "@/features/documents/documents-provider";
-import { getPdfFiles } from "@/lib/files";
+import { usePdfUploadDropzone } from "@/features/documents/hooks/use-pdf-upload-dropzone";
 
 export const Composer: FC = () => {
 	return (
@@ -33,24 +33,18 @@ export const Composer: FC = () => {
 
 const ComposerUpload: FC = () => {
 	const { uploading, upload } = useDocumentsContext();
-	const inputRef = useRef<HTMLInputElement>(null);
-
-	const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-		for (const file of getPdfFiles(e.target.files)) {
-			void upload(file);
-		}
-		if (inputRef.current) inputRef.current.value = "";
-	};
+	const uploadDropzone = usePdfUploadDropzone({
+		disabled: uploading,
+		onUpload: upload,
+	});
 
 	return (
 		<>
 			<input
-				ref={inputRef}
-				type="file"
-				accept="application/pdf,.pdf"
-				multiple
-				className="hidden"
-				onChange={handleChange}
+				{...uploadDropzone.getInputProps({
+					"aria-label": "Upload to focus documents",
+					className: "hidden",
+				})}
 			/>
 			<TooltipIconButton
 				tooltip="Upload to focus documents"
@@ -61,7 +55,7 @@ const ComposerUpload: FC = () => {
 				className="aui-composer-upload text-muted-foreground hover:text-foreground size-8 shrink-0"
 				aria-label="Upload to focus documents"
 				disabled={uploading}
-				onClick={() => inputRef.current?.click()}
+				onClick={uploadDropzone.open}
 			>
 				<PaperclipIcon className="size-4" />
 			</TooltipIconButton>
