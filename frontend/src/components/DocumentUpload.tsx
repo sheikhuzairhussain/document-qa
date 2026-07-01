@@ -1,5 +1,6 @@
 import { Loader2, Upload } from "lucide-react";
 import { type DragEvent, useCallback, useRef, useState } from "react";
+import { getPdfFiles } from "../lib/files";
 
 interface DocumentUploadProps {
 	onUpload: (file: File) => void;
@@ -27,8 +28,7 @@ export function DocumentUpload({
 		(e: DragEvent) => {
 			e.preventDefault();
 			setDragOver(false);
-			const file = e.dataTransfer.files[0];
-			if (file && file.type === "application/pdf") {
+			for (const file of getPdfFiles(e.dataTransfer.files)) {
 				onUpload(file);
 			}
 		},
@@ -41,8 +41,7 @@ export function DocumentUpload({
 
 	const handleFileChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
-			const file = e.target.files?.[0];
-			if (file) {
+			for (const file of getPdfFiles(e.target.files)) {
 				onUpload(file);
 			}
 			if (fileInputRef.current) {
@@ -69,6 +68,7 @@ export function DocumentUpload({
 				ref={fileInputRef}
 				type="file"
 				accept=".pdf"
+				multiple
 				className="hidden"
 				onChange={handleFileChange}
 			/>
@@ -84,10 +84,10 @@ export function DocumentUpload({
 				<div className="flex flex-col items-center">
 					<Upload className="mb-3 h-10 w-10 text-neutral-400" />
 					<p className="text-sm font-medium text-neutral-600">
-						Upload a PDF document
+						Upload to focus documents
 					</p>
 					<p className="mt-1 text-xs text-neutral-400">
-						Click or drag and drop
+						Drop PDFs here to pin them to this chat
 					</p>
 				</div>
 			)}

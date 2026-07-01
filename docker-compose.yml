@@ -1,16 +1,31 @@
 services:
   db:
-    image: postgres:16-alpine
+    # timescaledb-ha bundles pgvector, pgvectorscale (diskann) and pg_textsearch
+    # (BM25) — everything hybrid retrieval needs. pg_textsearch must be preloaded,
+    # so we pass shared_preload_libraries explicitly (keeping timescaledb's own).
+    # Storage is ephemeral: no volume is mounted, so the cluster lives in the
+    # container's own filesystem and is discarded when the container is removed
+    # (migrations re-run on backend startup, so a fresh DB is fine for dev).
+    image: timescale/timescaledb-ha:pg17
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb,pg_textsearch"]
     environment:
       POSTGRES_USER: orbital
       POSTGRES_PASSWORD: orbital
       POSTGRES_DB: orbital_takehome
     ports:
       - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U orbital -d orbital_takehome"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 2s
       timeout: 5s
       retries: 10
@@ -18,11 +33,11 @@ services:
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: backend/app/Dockerfile
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ./backend/src:/app/backend/src
+      - ./backend/app/src:/app/backend/app/src
       - ./alembic:/app/alembic
       - ./uploads:/app/uploads
       - ./pyproject.toml:/app/pyproject.toml
@@ -30,10 +45,38 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://orbital:orbital@db:5432/orbital_takehome
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: uv run uvicorn takehome.web.app:app --reload --host 0.0.0.0 --port 8000
+
+  # Ingestion worker: same image as backend, consumes the RQ "ingestion" queue
+  # (PyMuPDF page extraction -> Gemini page-PDF embeddings -> document_chunks).
+  worker:
+    build:
+      context: .
+      dockerfile: backend/app/Dockerfile
+    volumes:
+      - ./backend/app/src:/app/backend/app/src
+      - ./alembic:/app/alembic
+      - ./uploads:/app/uploads
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./alembic.ini:/app/alembic.ini
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://orbital:orbital@db:5432/orbital_takehome
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # SimpleWorker runs jobs in-process (no per-job fork). Forking breaks the
+    # google-genai/httpx client because httpx connection pools aren't fork-safe.
+    command: uv run rq worker --worker-class rq.SimpleWorker ingestion --url redis://redis:6379/0
 
   frontend:
     build:
@@ -51,5 +94,48 @@ services:
     depends_on:
       - backend
 
-volumes:
-  pgdata:
+  # --- Aegra agent stack (isolated image + database) ---------------------------
+  agents-db:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: agents
+      POSTGRES_PASSWORD: agents
+      POSTGRES_DB: aegra
+    ports:
+      - "${AEGRA_DB_PORT:-5433}:5432"
+    # Ephemeral storage: no volume mounted (Aegra re-runs `aegra db upgrade` on
+    # start, so a fresh database each run is fine for dev).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agents -d aegra"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  agents:
+    build:
+      context: .
+      dockerfile: backend/agents/Dockerfile
+    ports:
+      - "${AEGRA_PORT:-2026}:2026"
+    volumes:
+      - ./backend/agents/src:/app/backend/agents/src
+      - ./aegra.json:/app/aegra.json
+    env_file: .env
+    environment:
+      # Explicit DATABASE_URL wins over the backend's values inherited from .env,
+      # pointing Aegra at its own isolated database.
+      DATABASE_URL: postgresql+asyncpg://agents:agents@agents-db:5432/aegra
+      AEGRA_CONFIG: /app/aegra.json
+      AUTH_TYPE: noop
+      REDIS_BROKER_ENABLED: "false"
+      # The qa-agent's search_documents tool reads chunks from the *main* app
+      # database (sync psycopg), not Aegra's. GOOGLE_API_KEY comes from .env and
+      # is read automatically by the google-genai SDK for query embeddings.
+      RAG_DATABASE_URL: postgresql://orbital:orbital@db:5432/orbital_takehome
+      EMBEDDING_MODEL: gemini-embedding-2
+    depends_on:
+      agents-db:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    command: sh -c "aegra db upgrade && aegra serve --host 0.0.0.0 --port 2026"

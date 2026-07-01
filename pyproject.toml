@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend/src/takehome"]
+packages = ["backend/app/src/takehome"]
 
 [project]
 name = "orbital-takehome"
@@ -20,8 +20,17 @@ dependencies = [
     "alembic>=1.13.0",
     # LLM
     "pydantic-ai-slim[anthropic]>=0.0.39",
+    # Embeddings (Google Gemini). In main deps so both the worker AND the agent
+    # image get it — the agent image installs default deps only.
+    "google-genai>=1.0.0",
     # Document extraction
     "pymupdf>=1.25.0",
+    # Vector search (pgvector column types + driver adapters)
+    "pgvector>=0.3.6",
+    "psycopg[binary]>=3.2.0",
+    # Background job queue
+    "rq>=2.0.0",
+    "redis>=5.2.0",
     # HTTP client
     "httpx>=0.27.0",
     # Settings
@@ -32,6 +41,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     # Environment
     "python-dotenv>=1.0.0",
+    "deepagents>=0.6.12",
+    "aegra-cli>=0.9.23",
 ]
 
 [dependency-groups]
@@ -56,8 +67,8 @@ known-first-party = ["takehome"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
-extraPaths = ["backend/src"]
+extraPaths = ["backend/app/src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["backend/tests"]
+testpaths = ["backend/app/tests"]

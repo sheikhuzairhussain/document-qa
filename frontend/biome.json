@@ -17,5 +17,17 @@
     "rules": {
       "recommended": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          }
+        }
+      }
+    }
+  ]
 }

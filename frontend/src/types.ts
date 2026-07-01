@@ -1,28 +1,34 @@
-export interface Conversation {
-	id: string;
-	title: string;
-	created_at: string;
-	updated_at: string;
-	has_document: boolean;
-}
-
-export interface Message {
-	id: string;
-	conversation_id: string;
-	role: "user" | "assistant" | "system";
-	content: string;
-	sources_cited: number;
-	created_at: string;
-}
+/** Ingestion lifecycle, mirrored from the backend. A document is only
+ * queryable once it reaches "completed". */
+export type DocumentStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface Document {
 	id: string;
-	conversation_id: string;
 	filename: string;
 	page_count: number;
 	uploaded_at: string;
+	status: DocumentStatus;
+	/** Number of indexed chunks once processing completes. */
+	chunk_count: number;
+	/** Failure reason when status is "failed". */
+	error?: string | null;
 }
 
-export interface ConversationDetail extends Conversation {
-	document?: Document;
+export type AvailableDocuments = "all" | string[];
+
+export interface DocumentChunkCitation {
+	chunk_id: string;
+	document_id: string;
+	filename: string;
+	chunk_index: number;
+	page_no: number | null;
+}
+
+/**
+ * Which library documents are exposed to retrieval for a conversation. `"all"`
+ * means every document in the library, current and future. An array is an
+ * explicit allow-list. Focus documents are always included separately.
+ */
+export interface DocSelection {
+	library: AvailableDocuments;
 }

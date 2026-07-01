@@ -13,11 +13,11 @@ export function EmptyState({ onUpload, uploading }: EmptyStateProps) {
 				<FileSearch className="h-7 w-7 text-white" />
 			</div>
 			<h2 className="mb-2 text-lg font-semibold text-neutral-800">
-				Upload a document to get started
+				Start with a focus document
 			</h2>
 			<p className="mb-8 max-w-sm text-center text-sm text-neutral-500">
-				Ask questions about leases, title reports, contracts, and other legal
-				documents
+				Focus documents are library files pinned to this chat. Add other library
+				documents when you want them searchable too.
 			</p>
 			<DocumentUpload onUpload={onUpload} uploading={uploading} />
 		</div>

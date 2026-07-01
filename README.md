@@ -26,11 +26,19 @@ just setup
 ```
    This copies `.env.example` to `.env` and builds the Docker images.
 
-3. Add your Anthropic API key to `.env`:
+3. Add your API keys to `.env`:
 ```
 ANTHROPIC_API_KEY=your_key_here
+GOOGLE_API_KEY=your_key_here
 ```
-   We've provided an API key in the task email. You can also use your own.
+   The Anthropic key powers the chat/agent models; the Google key powers
+   document-page and query **embeddings** for retrieval. We've provided an
+   Anthropic key in the task email. You can also use your own.
+
+   > Note: the databases use **ephemeral in-container storage** (no volumes), so
+   > data is discarded when the containers are removed. Migrations re-run on
+   > startup, so every fresh `just dev` starts from a clean, correctly-migrated
+   > database.
 
 4. Start everything:
 ```
@@ -41,8 +49,43 @@ just dev
 
 5. Open http://localhost:5173 in your browser.
 
-Your local `backend/src/` and `frontend/src/` directories are mounted into the containers —
+Your local `backend/app/src/` and `frontend/src/` directories are mounted into the containers —
 edit files normally on your machine and changes hot-reload automatically.
+
+### Document ingestion & retrieval
+
+Uploaded PDFs are indexed by a background pipeline so the assistant can retrieve
+the relevant passages instead of being handed the whole document:
+
+1. **Upload** (`backend/app/.../services/document.py`) — the file is stored, the
+   `documents` row is created with `status="pending"`, and an ingestion job is
+   pushed onto a Redis-backed **RQ** queue. Upload does not parse or extract the
+   PDF.
+2. **Worker** (`backend/app/.../services/ingestion.py`, the `worker` service) —
+   splits the PDF into single-page PDFs with **PyMuPDF**, extracts page text and
+   block-level geometry, embeds each page with **Gemini Embedding 2**, and stores
+   one row per page in `document_chunks`. Page embedding runs with 32 concurrent
+   calls by default. The document moves `processing → completed` (or `failed`,
+   with an error message). Scanned / image-only pages can still be visually
+   searchable through the PDF embedding, but quoteable text is only stored when
+   PyMuPDF can extract it.
+3. **Status** — `status`, `chunk_count`, and `error` are returned by the
+   documents API and shown per-row in the UI (it polls while indexing), with a
+   "Retry processing" action for failures.
+4. **Retrieval** — the `qa-agent` (`backend/agents/.../qa_agent/`) exposes a
+   `search_documents` tool that runs **hybrid search** over `document_chunks`:
+   dense similarity via **pgvectorscale** (StreamingDiskANN, `<=>`) fused with
+   **pg_textsearch** BM25 keyword relevance (`<@>`) using **reciprocal rank
+   fusion**.
+
+Both vector and BM25 indexes come from the `timescale/timescaledb-ha` Postgres
+image (replacing `postgres:16-alpine`), which bundles pgvector, pgvectorscale,
+and pg_textsearch. `pg_textsearch` is enabled via `shared_preload_libraries` in
+`docker-compose.yml`, and the DB uses ephemeral in-container storage (no volume).
+The schema lives in migration `003`.
+
+New services in `docker-compose.yml`: `redis` (queue broker) and `worker` (the
+RQ consumer, sharing the backend image). `just dev` starts them with the rest.
 
 ### Sample Documents
 
@@ -51,7 +94,8 @@ We've included sample legal documents in `sample-docs/` for testing.
 ### Project Structure
 
 - `frontend/` — React frontend (Vite + Tailwind + shadcn/Radix UI)
-- `backend/` — FastAPI backend (Python 3.12 + SQLAlchemy + PydanticAI)
+- `backend/app/` — FastAPI backend (Python 3.12 + SQLAlchemy + PydanticAI)
+- `backend/agents/` — Aegra-served LangGraph agents (Python 3.12 + LangGraph)
 - `alembic/` — Database migrations
 - `data/` — Product analytics and customer feedback (for Part 2)
 - `sample-docs/` — Sample PDF documents for testing

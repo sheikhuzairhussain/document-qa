@@ -1,0 +1,25 @@
+# Keep the root build context small (both backend/ and agents/ build from here)
+.git
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+*.egg-info
+.ruff_cache
+.pytest_cache
+
+# Node / frontend build artifacts
+frontend/node_modules
+frontend/dist
+
+# Runtime data — not needed at image build time
+uploads/*
+!uploads/.gitkeep
+data
+sample-docs
+
+# Tooling / editor
+.claude
+.vscode
+.idea
+.DS_Store

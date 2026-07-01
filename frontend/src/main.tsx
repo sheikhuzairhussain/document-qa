@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@fontsource-variable/ibm-plex-sans";
 import "@fontsource/ibm-plex-mono";
 import "@fontsource/ibm-plex-serif";
@@ -11,8 +12,22 @@ if (!root) {
 	throw new Error("Root element not found");
 }
 
+const queryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			retry: 1,
+			staleTime: 1000,
+		},
+		mutations: {
+			retry: 1,
+		},
+	},
+});
+
 ReactDOM.createRoot(root).render(
 	<React.StrictMode>
-		<App />
+		<QueryClientProvider client={queryClient}>
+			<App />
+		</QueryClientProvider>
 	</React.StrictMode>,
 );

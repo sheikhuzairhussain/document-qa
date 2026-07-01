@@ -21,7 +21,7 @@ setup:
 # Development
 # =============================================================================
 
-# Start the full stack (Postgres, backend, frontend) with hot reload
+# Start the full stack (Postgres, backend, frontend, agents) with hot reload
 dev:
     docker compose up
 
@@ -33,7 +33,7 @@ dev-detach:
 stop:
     docker compose down
 
-# Stop all services and remove database volume
+# Stop all services and remove database volumes (backend + agents)
 reset:
     docker compose down -v
     @echo "All data cleared. Run 'just dev' to start fresh."
@@ -41,6 +41,14 @@ reset:
 # View backend logs
 logs-backend:
     docker compose logs -f backend
+
+# View ingestion worker logs
+logs-worker:
+    docker compose logs -f worker
+
+# View agents (Aegra) logs
+logs-agents:
+    docker compose logs -f agents
 
 # View all logs
 logs:
@@ -67,6 +75,14 @@ db-upgrade:
 db-shell:
     docker compose exec db psql -U orbital orbital_takehome
 
+# Open psql shell on the Aegra (agents) database
+db-shell-agents:
+    docker compose exec agents-db psql -U agents aegra
+
+# Apply Aegra migrations manually (runs automatically on container start)
+agents-db-upgrade:
+    docker compose exec agents aegra db upgrade
+
 # =============================================================================
 # Code Quality
 # =============================================================================
@@ -79,13 +95,13 @@ fmt: fmt-backend fmt-frontend
 
 # Python checks
 check-backend:
-    docker compose exec backend uv run ruff check backend/src
-    docker compose exec backend uv run pyright backend/src
+    docker compose exec backend uv run ruff check backend/app/src
+    docker compose exec backend uv run pyright backend/app/src
 
 # Format Python
 fmt-backend:
-    docker compose exec backend uv run ruff format backend/src
-    docker compose exec backend uv run ruff check --fix backend/src
+    docker compose exec backend uv run ruff format backend/app/src
+    docker compose exec backend uv run ruff check --fix backend/app/src
 
 # Frontend checks
 check-frontend:
@@ -106,6 +122,10 @@ shell-backend:
 # Shell into frontend container
 shell-frontend:
     docker compose exec frontend bash
+
+# Shell into agents (Aegra) container
+shell-agents:
+    docker compose exec agents bash
 
 # Install a new Python dependency
 add-dep package:
