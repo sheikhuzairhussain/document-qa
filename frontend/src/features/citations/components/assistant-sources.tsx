@@ -44,7 +44,7 @@ export const AssistantSources: FC = () => {
 			data-slot="aui_assistant-message-sources"
 			className="mt-3 flex flex-wrap items-center gap-1.5"
 		>
-			<span className="text-muted-foreground mr-0.5 text-[11px] font-medium">
+			<span className="text-muted-foreground mr-0.5 text-xs font-medium">
 				Sources
 			</span>
 			{sources.map((source) => (
@@ -52,7 +52,7 @@ export const AssistantSources: FC = () => {
 					key={source.id}
 					type="button"
 					data-source-type={source.sourceType}
-					className="border-border/60 bg-muted/40 text-muted-foreground hover:border-border hover:bg-muted inline-flex h-6 max-w-48 items-center gap-1.5 rounded-md border px-2 text-[11px] leading-none transition-colors"
+					className="border-border/60 bg-muted/40 text-muted-foreground hover:border-border hover:bg-muted inline-flex h-6 max-w-48 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-xs leading-none transition-colors"
 					title={source.filename}
 					onClick={() =>
 						openDocument({

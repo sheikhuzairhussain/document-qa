@@ -9,18 +9,9 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DestructiveConfirmDialog } from "@/components/ui/destructive-confirm-dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -134,7 +125,7 @@ export function DocumentRow({
 			<button
 				type="button"
 				onClick={onPreview}
-				className="flex min-w-0 flex-1 items-center gap-2 text-left"
+				className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
 			>
 				<FileText className="h-4 w-4 shrink-0 text-neutral-400" />
 				<span className="min-w-0 flex-1">
@@ -152,7 +143,7 @@ export function DocumentRow({
 							type="button"
 							variant="ghost"
 							size="icon-sm"
-							className="shrink-0 text-neutral-400 hover:text-neutral-700"
+							className="shrink-0 cursor-pointer text-neutral-400 hover:text-neutral-700"
 							aria-label={`Retry processing ${document.filename}`}
 							onClick={onReprocess}
 						>
@@ -172,7 +163,7 @@ export function DocumentRow({
 							type="button"
 							variant="ghost"
 							size="icon-sm"
-							className="shrink-0 text-neutral-400 hover:text-neutral-700"
+							className="shrink-0 cursor-pointer text-neutral-400 hover:text-neutral-700"
 							aria-label={`${focusAction.label}: ${document.filename}`}
 							onClick={focusAction.onClick}
 						>
@@ -190,7 +181,7 @@ export function DocumentRow({
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						className="shrink-0 text-neutral-400 hover:text-neutral-700"
+						className="shrink-0 cursor-pointer text-neutral-400 hover:text-neutral-700"
 						aria-label={`Actions for ${document.filename}`}
 					>
 						<MoreHorizontal className="h-4 w-4" />
@@ -207,26 +198,16 @@ export function DocumentRow({
 				</DropdownMenuContent>
 			</DropdownMenu>
 
-			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete document?</AlertDialogTitle>
-						<AlertDialogDescription>
-							“{document.filename}” will be permanently removed from the library
-							and any chat where it is a focus document. This can’t be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={onDelete}
-							className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/30"
-						>
-							Delete
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			<DestructiveConfirmDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title="Delete document?"
+				entityName={document.filename}
+				onConfirm={onDelete}
+			>
+				will be permanently removed from the library and unpinned from any chat
+				where it is a focus document. This can't be undone.
+			</DestructiveConfirmDialog>
 		</div>
 	);
 }

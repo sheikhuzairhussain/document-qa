@@ -149,7 +149,7 @@ const DocumentSearchToolRun: FC<{ parts: readonly DocumentToolPart[] }> = ({
 				<DocumentToolRowIcon Icon={FileSearchIcon} />
 				<DocumentToolLabel label={label} running={isRunning} />
 				{!isRunning && (
-					<span className="text-muted-foreground/70 ms-auto shrink-0 text-[11px]">
+					<span className="text-muted-foreground/70 ms-auto shrink-0 text-xs">
 						{formatResultCount(pageTargets.length)}
 					</span>
 				)}
@@ -163,7 +163,7 @@ const DocumentSearchToolRun: FC<{ parts: readonly DocumentToolPart[] }> = ({
 								<button
 									key={page.key}
 									type="button"
-									className="text-muted-foreground hover:bg-muted/60 hover:text-foreground flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11px] transition-colors"
+									className="text-muted-foreground hover:bg-muted/60 hover:text-foreground flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs transition-colors"
 									onClick={() =>
 										openDocument({
 											documentId: page.documentId,
@@ -183,7 +183,7 @@ const DocumentSearchToolRun: FC<{ parts: readonly DocumentToolPart[] }> = ({
 							))}
 						</div>
 					) : (
-						<p className="text-muted-foreground/70 px-1.5 py-1 text-[11px]">
+						<p className="text-muted-foreground/70 px-1.5 py-1 text-xs">
 							No pages returned.
 						</p>
 					)}
@@ -228,7 +228,7 @@ const DocumentReadToolRow: FC<{ part: DocumentToolPart }> = ({ part }) => {
 			<DocumentToolRowIcon Icon={FileTextIcon} />
 			<DocumentToolLabel label={label} running={isRunning} />
 			{focusTarget && (
-				<span className="text-muted-foreground/70 ms-auto min-w-0 max-w-48 truncate text-[11px]">
+				<span className="text-muted-foreground/70 ms-auto min-w-0 max-w-48 truncate text-xs">
 					{focusTarget.filename}
 				</span>
 			)}

@@ -1,8 +1,15 @@
-import { AuiIf, ThreadPrimitive } from "@assistant-ui/react";
+import {
+	type AssistantState,
+	AuiIf,
+	ThreadPrimitive,
+	useAuiState,
+	useThreadViewport,
+} from "@assistant-ui/react";
 import { ArrowDownIcon } from "lucide-react";
-import { type FC, useContext } from "react";
+import { type FC, useContext, useLayoutEffect } from "react";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { cn } from "@/lib/utils";
+import type { AvailableDocuments } from "@/types";
 import { Composer } from "./composer";
 import {
 	isNewChatView,
@@ -11,7 +18,10 @@ import {
 import { ThreadMessage } from "./thread-messages";
 import { ThreadSuggestions, ThreadWelcome } from "./thread-welcome";
 
-export const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
+export const ThreadRoot: FC<{
+	isEmpty: boolean;
+	availableDocuments: AvailableDocuments;
+}> = ({ isEmpty, availableDocuments }) => {
 	const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
 
 	return (
@@ -26,10 +36,12 @@ export const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
 			}}
 		>
 			<ThreadPrimitive.Viewport
-				turnAnchor="top"
+				autoScroll
+				turnAnchor="bottom"
 				data-slot="aui_thread-viewport"
-				className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
+				className="relative flex flex-1 flex-col overflow-x-auto overflow-y-auto"
 			>
+				<ThreadBottomAnchor />
 				<div
 					className={cn(
 						"mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 py-4",
@@ -57,11 +69,29 @@ export const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
 					<AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
 						<ThreadSuggestions />
 					</AuiIf>
-					<Composer />
+					<Composer availableDocuments={availableDocuments} />
 				</div>
 			</div>
 		</ThreadPrimitive.Root>
 	);
+};
+
+const ThreadBottomAnchor: FC = () => {
+	const scrollToBottom = useThreadViewport((s) => s.scrollToBottom);
+	const anchorKey = useAuiState(selectBottomAnchorKey);
+
+	useLayoutEffect(() => {
+		if (anchorKey === "empty") return;
+
+		scrollToBottom({ behavior: "instant" });
+		const frame = requestAnimationFrame(() => {
+			scrollToBottom({ behavior: "instant" });
+		});
+
+		return () => cancelAnimationFrame(frame);
+	}, [anchorKey, scrollToBottom]);
+
+	return null;
 };
 
 const ThreadScrollToBottom: FC = () => {
@@ -77,3 +107,46 @@ const ThreadScrollToBottom: FC = () => {
 		</ThreadPrimitive.ScrollToBottom>
 	);
 };
+
+type ThreadPartState =
+	AssistantState["thread"]["messages"][number]["parts"][number];
+
+function selectBottomAnchorKey(state: AssistantState): string {
+	const messages = state.thread.messages;
+	const lastMessage = messages.at(-1);
+	if (!lastMessage) return "empty";
+
+	return [
+		state.thread.isRunning ? "running" : "idle",
+		messages.length,
+		lastMessage.id,
+		lastMessage.role,
+		lastMessage.status?.type ?? "complete",
+		lastMessage.parts.map(partBottomAnchorKey).join(","),
+	].join("|");
+}
+
+function partBottomAnchorKey(part: ThreadPartState): string {
+	const status = part.status.type;
+	switch (part.type) {
+		case "text":
+		case "reasoning":
+			return `${part.type}:${status}:${part.text.length}`;
+		case "tool-call":
+			return [
+				part.type,
+				status,
+				part.toolCallId,
+				part.toolName,
+				part.argsText.length,
+				part.result === undefined ? "pending" : "result",
+				part.isError ? "error" : "ok",
+			].join(":");
+		case "source":
+			return `${part.type}:${status}:${part.id}`;
+		case "data":
+			return `${part.type}:${status}:${part.name}`;
+		default:
+			return `${part.type}:${status}`;
+	}
+}

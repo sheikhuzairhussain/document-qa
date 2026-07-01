@@ -353,10 +353,10 @@ export default function PdfViewerDialog({
 								}}
 								placeholder="Search"
 								aria-label="Find in PDF"
-								className="h-5 flex-1 border-0 bg-transparent px-1 py-0 text-[11px] text-neutral-600 placeholder:text-neutral-400 focus-visible:ring-0 md:text-[11px]"
+								className="h-5 flex-1 border-0 bg-transparent px-1 py-0 text-xs text-neutral-600 placeholder:text-neutral-400 focus-visible:ring-0"
 							/>
 							{findQuery.trim() ? (
-								<span className="min-w-10 text-right text-[11px] tabular-nums text-neutral-400">
+								<span className="min-w-10 text-right text-xs tabular-nums text-neutral-400">
 									{activeFindOrdinal}/{findMatchCount}
 								</span>
 							) : null}

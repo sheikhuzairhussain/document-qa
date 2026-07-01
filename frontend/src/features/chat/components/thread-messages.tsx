@@ -16,8 +16,6 @@ import {
 	CopyIcon,
 	DownloadIcon,
 	MoreHorizontalIcon,
-	PencilIcon,
-	RefreshCwIcon,
 } from "lucide-react";
 import { type FC, useContext } from "react";
 import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
@@ -31,6 +29,7 @@ import {
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
+import { DocumentMentionText } from "@/features/chat/components/document-mention-text";
 import { AssistantSources } from "@/features/citations/components/assistant-sources";
 import {
 	DocumentToolCall,
@@ -178,11 +177,6 @@ const AssistantActionBar: FC = () => {
 					</AuiIf>
 				</TooltipIconButton>
 			</ActionBarPrimitive.Copy>
-			<ActionBarPrimitive.Reload asChild>
-				<TooltipIconButton tooltip="Refresh">
-					<RefreshCwIcon />
-				</TooltipIconButton>
-			</ActionBarPrimitive.Reload>
 			<ActionBarMorePrimitive.Root>
 				<ActionBarMorePrimitive.Trigger asChild>
 					<TooltipIconButton
@@ -221,10 +215,7 @@ const UserMessage: FC = () => {
 
 			<div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
 				<div className="aui-user-message-content peer bg-muted text-foreground wrap-break-word rounded-xl px-3 py-1.5 text-sm leading-6 empty:hidden">
-					<MessagePrimitive.Parts />
-				</div>
-				<div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
-					<UserActionBar />
+					<MessagePrimitive.Parts components={{ Text: UserMessageText }} />
 				</div>
 			</div>
 
@@ -236,19 +227,14 @@ const UserMessage: FC = () => {
 	);
 };
 
-const UserActionBar: FC = () => {
+const UserMessageText: FC = () => {
+	const part = useAuiState((s) => s.part);
+	if (part.type !== "text") return null;
+
 	return (
-		<ActionBarPrimitive.Root
-			hideWhenRunning
-			autohide="not-last"
-			className="aui-user-action-bar-root flex flex-col items-end"
-		>
-			<ActionBarPrimitive.Edit asChild>
-				<TooltipIconButton tooltip="Edit" className="aui-user-action-edit">
-					<PencilIcon />
-				</TooltipIconButton>
-			</ActionBarPrimitive.Edit>
-		</ActionBarPrimitive.Root>
+		<p className="whitespace-pre-wrap">
+			<DocumentMentionText text={part.text} />
+		</p>
 	);
 };
 

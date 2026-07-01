@@ -13,17 +13,8 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DestructiveConfirmDialog } from "@/components/ui/destructive-confirm-dialog";
 import {
 	Dialog,
 	DialogContent,
@@ -164,27 +155,16 @@ function ThreadRow() {
 				</DialogContent>
 			</Dialog>
 
-			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete chat?</AlertDialogTitle>
-						<AlertDialogDescription>
-							<span className="font-medium text-foreground">{title}</span> and
-							all of its messages will be permanently deleted. This can't be
-							undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/30"
-							onClick={() => runtime.delete()}
-						>
-							Delete
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			<DestructiveConfirmDialog
+				open={deleteOpen}
+				onOpenChange={setDeleteOpen}
+				title="Delete chat?"
+				entityName={title}
+				onConfirm={() => runtime.delete()}
+			>
+				and all of its messages will be permanently deleted. This can't be
+				undone.
+			</DestructiveConfirmDialog>
 		</SidebarMenuItem>
 	);
 }

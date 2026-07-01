@@ -8,6 +8,7 @@ import {
 	createContext,
 	type PropsWithChildren,
 } from "react";
+import type { AvailableDocuments } from "@/types";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -29,6 +30,7 @@ export type ThreadComponents = {
 };
 
 export type ThreadProps = {
+	availableDocuments: AvailableDocuments;
 	components?: ThreadComponents | undefined;
 };
 

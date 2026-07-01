@@ -20,9 +20,9 @@ interface DocumentsContextValue {
 	/** Ids of documents explicitly marked as focus for the current chat. */
 	focusDocumentIds: Set<string>;
 	/** Upload a PDF and add it to focus by default. */
-	upload: (file: File) => Promise<void>;
+	upload: (file: File) => Promise<Document | null>;
 	/** Upload a PDF to the document library without adding it to focus. */
-	uploadToLibrary: (file: File) => Promise<void>;
+	uploadToLibrary: (file: File) => Promise<Document | null>;
 	addToFocus: (document: Document) => Promise<void>;
 	removeFromFocus: (document: Document) => Promise<void>;
 	deleteDocument: (document: Document) => Promise<void>;
@@ -63,15 +63,16 @@ export function DocumentsProvider({ children }: PropsWithChildren) {
 	const upload = useCallback(
 		async (file: File) => {
 			const doc = await uploadDoc(file);
-			if (!doc) return;
+			if (!doc) return null;
 			await addFocusDocument(doc.id);
+			return doc;
 		},
 		[uploadDoc, addFocusDocument],
 	);
 
 	const uploadToLibrary = useCallback(
 		async (file: File) => {
-			await uploadDoc(file);
+			return await uploadDoc(file);
 		},
 		[uploadDoc],
 	);

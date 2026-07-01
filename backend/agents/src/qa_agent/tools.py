@@ -22,6 +22,8 @@ from qa_agent.retrieval import (
 
 logger = structlog.get_logger()
 
+CITATION_MARKER_END = "]]"
+
 
 class DocumentSourceChunk(TypedDict):
     chunk_id: str
@@ -38,6 +40,10 @@ class DocumentSourcesArtifact(TypedDict):
 
 def _empty_artifact() -> DocumentSourcesArtifact:
     return {"type": "document_sources_v1", "chunks": []}
+
+
+def _citation_marker_start_for_chunk(chunk_id: str) -> str:
+    return f"[[cite:{chunk_id}|"
 
 
 def _source_chunk(chunk: RetrievedChunk | DocumentChunkText) -> DocumentSourceChunk:
@@ -77,7 +83,8 @@ def _format_source_header(
         f"chunk_id: {chunk.chunk_id}\n"
         f"document_id: {chunk.document_id}\n"
         f"source: {' — '.join(location_parts)}\n"
-        f"citation_marker: [[cite:{chunk.chunk_id}|<exact text copied from this chunk>]]"
+        f"citation_marker_start: {_citation_marker_start_for_chunk(chunk.chunk_id)}\n"
+        f"citation_marker_end: {CITATION_MARKER_END}"
     )
 
 
@@ -114,8 +121,9 @@ def _format_document_chunks(chunks: list[DocumentChunkText]) -> str:
         f"Indexed chunks: {len(chunks)}",
         (
             "Cite any quoted or relied-on text using the chunk_id shown on each "
-            "source block and this exact marker format: "
-            "[[cite:<chunk_id>|<exact text copied from that chunk>]]."
+            "source block. Each source block provides citation_marker_start and "
+            "citation_marker_end; place a short exact supporting span copied from "
+            "that chunk between them."
         ),
     ]
 

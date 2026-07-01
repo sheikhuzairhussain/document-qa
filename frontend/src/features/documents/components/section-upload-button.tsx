@@ -14,8 +14,8 @@ export function SectionUploadButton({
 		<Button
 			type="button"
 			variant="outline"
-			size="sm"
-			className="h-6 shrink-0 gap-1 rounded-md px-1.5 text-[11px]"
+			size="xs"
+			className="shrink-0 gap-1 rounded-md px-1.5"
 			disabled={uploading}
 			aria-label={ariaLabel}
 			onClick={onClick}

@@ -5,7 +5,7 @@ import {
 } from "@/features/documents/document-context-schemas";
 import type { AvailableDocuments, DocSelection } from "@/types";
 
-const DEFAULT_SELECTION: DocSelection = { library: [] };
+const DEFAULT_SELECTION: DocSelection = { library: "all" };
 
 // --------------------------------------------------------------------------- //
 // Persistence layer (isolated on purpose)

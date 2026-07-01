@@ -76,13 +76,13 @@ export function DocumentSection({
 							{title}
 						</h3>
 						{count > 0 && (
-							<span className="shrink-0 rounded-full bg-neutral-100 px-1.5 text-[11px] font-medium text-neutral-500 tabular-nums">
+							<span className="shrink-0 rounded-full bg-neutral-100 px-1.5 text-xs font-medium text-neutral-500 tabular-nums">
 								{count}
 							</span>
 						)}
 					</div>
 					{description && (
-						<p className="mt-0.5 text-[11px] leading-snug text-neutral-400">
+						<p className="mt-0.5 text-xs leading-snug text-neutral-400">
 							{description}
 						</p>
 					)}
@@ -91,7 +91,7 @@ export function DocumentSection({
 			</div>
 
 			{count === 0 ? (
-				<p className="mt-2 px-2 pb-1 text-[11px] leading-snug text-neutral-400">
+				<p className="mt-2 px-2 pb-1 text-xs leading-snug text-neutral-400">
 					{loading ? "Loading…" : emptyHint}
 				</p>
 			) : (

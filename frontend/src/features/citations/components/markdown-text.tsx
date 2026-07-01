@@ -27,10 +27,13 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+	type CitationRenderToken,
 	citationHrefToMarker,
 	type DocumentSourceChunk,
+	extractCitationRenderTokens,
 	extractSourceChunksFromParts,
-	replaceCitationMarkersWithLinks,
+	isPendingCitationHref,
+	preprocessCitationMarkers,
 } from "@/features/citations/citations";
 import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
 import { cn } from "@/lib/utils";
@@ -72,10 +75,10 @@ const MarkdownTextImpl = () => {
 	return (
 		<CitationMetadataContext.Provider value={{ citationsByChunkId }}>
 			<MarkdownTextPrimitive
-				remarkPlugins={[remarkGfm]}
+				remarkPlugins={[remarkGfm, remarkCitationTokens]}
 				className="aui-md"
 				components={defaultComponents}
-				preprocess={replaceCitationMarkersWithLinks}
+				preprocess={preprocessCitationMarkers}
 				defer
 			/>
 		</CitationMetadataContext.Provider>
@@ -138,12 +141,17 @@ function CitationAwareLink({
 	children,
 	...props
 }: AnchorHTMLAttributes<HTMLAnchorElement>) {
-	const marker = href ? citationHrefToMarker(href) : null;
+	const isPendingCitation = href ? isPendingCitationHref(href) : false;
+	const marker = href && !isPendingCitation ? citationHrefToMarker(href) : null;
 	const { citationsByChunkId } = useContext(CitationMetadataContext);
 	const citationSource = marker
 		? (citationsByChunkId.get(marker.chunkId) ?? null)
 		: null;
 	const { openDocument } = usePdfViewer();
+
+	if (isPendingCitation) {
+		return <PendingCitationChip className={className} />;
+	}
 
 	if (!marker) {
 		return (
@@ -190,7 +198,7 @@ function CitationAwareLink({
 				<button
 					type="button"
 					className={cn(
-						"border-border/60 bg-muted/50 text-muted-foreground hover:border-border hover:bg-muted mx-0.5 inline-flex h-5 max-w-36 translate-y-[-1px] items-center gap-1 rounded-md border px-1.5 align-baseline text-[11px] leading-none font-medium transition-colors",
+						"border-border/60 bg-muted/50 text-muted-foreground hover:border-border hover:bg-muted mx-0.5 inline-flex h-5 max-w-36 translate-y-[-1px] cursor-pointer items-center gap-1 rounded-md border px-1.5 align-baseline text-xs leading-none font-medium transition-colors",
 						className,
 					)}
 					onClick={handleClick}
@@ -215,6 +223,70 @@ function CitationAwareLink({
 	);
 }
 
+function PendingCitationChip({ className }: { className?: string }) {
+	return (
+		<span
+			className={cn(
+				"border-border/60 bg-muted/50 mx-0.5 inline-flex h-5 w-24 translate-y-[-1px] items-center gap-1 overflow-hidden rounded-md border px-1.5 align-baseline",
+				className,
+			)}
+			role="status"
+			aria-label="Citation loading"
+		>
+			<FileTextIcon className="text-muted-foreground/50 size-3 shrink-0" />
+			<span className="relative h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted-foreground/15">
+				<span className="shimmer pointer-events-none absolute inset-0 block motion-reduce:animate-none" />
+			</span>
+		</span>
+	);
+}
+
+type MarkdownNode = {
+	type: string;
+	value?: string;
+	url?: string;
+	children?: MarkdownNode[];
+};
+
+function remarkCitationTokens() {
+	return (tree: MarkdownNode) => {
+		replaceCitationTextNodes(tree);
+	};
+}
+
+function replaceCitationTextNodes(node: MarkdownNode) {
+	if (node.type === "code" || node.type === "inlineCode" || !node.children) {
+		return;
+	}
+
+	node.children = node.children.flatMap((child) => {
+		if (child.type === "text" && typeof child.value === "string") {
+			return citationTextToNodes(child.value);
+		}
+
+		replaceCitationTextNodes(child);
+		return [child];
+	});
+}
+
+function citationTextToNodes(value: string): MarkdownNode[] {
+	return extractCitationRenderTokens(value).flatMap((part) => {
+		if (typeof part === "string") {
+			return part ? [{ type: "text", value: part }] : [];
+		}
+
+		return [citationTokenToNode(part)];
+	});
+}
+
+function citationTokenToNode(token: CitationRenderToken): MarkdownNode {
+	return {
+		type: "link",
+		url: token.href,
+		children: [{ type: "text", value: token.label }],
+	};
+}
+
 const defaultComponents = memoizeMarkdownComponents({
 	h1: ({ className, ...props }) => (
 		<h1
@@ -228,7 +300,7 @@ const defaultComponents = memoizeMarkdownComponents({
 	h2: ({ className, ...props }) => (
 		<h2
 			className={cn(
-				"aui-md-h2 mt-4 mb-1.5 scroll-m-20 text-[15px] font-semibold first:mt-0 last:mb-0",
+				"aui-md-h2 mt-4 mb-1.5 scroll-m-20 text-sm font-semibold first:mt-0 last:mb-0",
 				className,
 			)}
 			{...props}
@@ -364,7 +436,7 @@ const defaultComponents = memoizeMarkdownComponents({
 	pre: ({ className, ...props }) => (
 		<pre
 			className={cn(
-				"aui-md-pre border-border/50 bg-muted/30 overflow-x-auto rounded-t-none rounded-b-xl border border-t-0 p-3.5 text-[13px] leading-relaxed",
+				"aui-md-pre border-border/50 bg-muted/30 overflow-x-auto rounded-t-none rounded-b-xl border border-t-0 p-3.5 text-xs leading-relaxed",
 				className,
 			)}
 			{...props}
@@ -376,7 +448,7 @@ const defaultComponents = memoizeMarkdownComponents({
 			<code
 				className={cn(
 					!isCodeBlock &&
-						"aui-md-inline-code bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]",
+						"aui-md-inline-code bg-muted rounded-md px-1.5 py-0.5 font-mono text-xs",
 					className,
 				)}
 				{...props}

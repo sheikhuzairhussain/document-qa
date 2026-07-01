@@ -17,13 +17,14 @@ export type {
 } from "./thread-components-context";
 
 export const Thread: FC<ThreadProps> = ({
+	availableDocuments,
 	components = EMPTY_THREAD_COMPONENTS,
 }) => {
 	const isEmpty = useAuiState(isNewChatView);
 
 	return (
 		<ThreadComponentsContext.Provider value={components}>
-			<ThreadRoot isEmpty={isEmpty} />
+			<ThreadRoot isEmpty={isEmpty} availableDocuments={availableDocuments} />
 		</ThreadComponentsContext.Provider>
 	);
 };
