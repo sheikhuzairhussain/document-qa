@@ -1,4 +1,7 @@
-import { AgentRuntimeProvider } from "@/components/AgentRuntimeProvider";
+import {
+	ActiveThreadProvider,
+	AgentRuntimeProvider,
+} from "@/components/AgentRuntimeProvider";
 import { DocumentPanel } from "@/components/DocumentPanel";
 import { PdfViewerProvider } from "@/components/PdfViewer";
 import { ThreadSidebar } from "@/components/ThreadSidebar";
@@ -15,14 +18,11 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useDocumentSelection } from "@/hooks/use-document-selection";
+import { resolveAvailableDocuments } from "@/lib/available-documents";
 import { getPdfFiles } from "@/lib/files";
-import {
-	resolveAvailableDocuments,
-	setAvailableDocuments,
-} from "@/lib/rag-selection";
 import { cn } from "@/lib/utils";
 import { FileText, FolderOpen } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 const SIDEBAR_MIN_WIDTH = 240;
 const SIDEBAR_MAX_WIDTH = 460;
@@ -54,13 +54,11 @@ function documentDropIntentFromTarget(
 export default function App() {
 	return (
 		<TooltipProvider delayDuration={200}>
-			<AgentRuntimeProvider>
+			<ActiveThreadProvider>
 				<DocumentsProvider>
-					<PdfViewerProvider>
-						<Workspace />
-					</PdfViewerProvider>
+					<Workspace />
 				</DocumentsProvider>
-			</AgentRuntimeProvider>
+			</ActiveThreadProvider>
 		</TooltipProvider>
 	);
 }
@@ -97,10 +95,6 @@ function Workspace() {
 			}),
 		[documents, focusDocumentIds, selection.selection],
 	);
-
-	useEffect(() => {
-		setAvailableDocuments(availableDocuments);
-	}, [availableDocuments]);
 
 	const handleUpload = useCallback(
 		async (file: File) => {
@@ -207,74 +201,80 @@ function Workspace() {
 	);
 
 	return (
-		<SidebarProvider
-			style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
-			className={cn(
-				"relative",
-				isResizing &&
-					"[&_[data-slot=sidebar-gap]]:transition-none [&_[data-slot=sidebar-container]]:transition-none",
-			)}
-			onDragEnterCapture={handlePageDragEnter}
-			onDragOverCapture={handlePageDragOver}
-			onDragLeaveCapture={handlePageDragLeave}
-			onDropCapture={handlePageDrop}
-		>
-			{isPageDragging && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 p-6 backdrop-blur-[2px]">
-					<div className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
-						<DocumentDropTarget
-							intent="focus"
-							active={pageDropIntent === "focus" || pageDropIntent === null}
-							icon={<FileText className="size-5" />}
-							title="Add to focus documents"
-							description="Pin PDFs to this chat so the agent gives them extra attention"
-						/>
-						<DocumentDropTarget
-							intent="library"
-							active={pageDropIntent === "library"}
-							icon={<FolderOpen className="size-5" />}
-							title="Add to library"
-							description="Store PDFs across chats without making them focus documents"
-						/>
-					</div>
-				</div>
-			)}
-			<ThreadSidebar
-				onResizeStart={handleResizeStart}
-				isResizing={isResizing}
-			/>
-
-			<SidebarInset className="h-screen min-h-0 overflow-hidden">
-				<header className="flex h-12 shrink-0 items-center gap-2 border-b border-neutral-200 bg-white px-3">
-					<SidebarTrigger className="-ml-1" />
-					<Separator orientation="vertical" />
-					<h1 className="truncate text-sm font-medium text-neutral-700">
-						Document Q&amp;A
-					</h1>
-				</header>
-
-				<div className="flex min-h-0 flex-1">
-					<main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-						<Thread />
-					</main>
-
-					<DocumentPanel
-						focusDocuments={focusDocuments}
-						libraryDocuments={libraryDocuments}
-						loading={documentsLoading}
-						uploading={uploading}
-						error={documentsError}
-						selection={selection}
-						onUpload={handleUpload}
-						onUploadToLibrary={handleLibraryUpload}
-						onAddToFocus={addToFocus}
-						onRemoveFromFocus={removeFromFocus}
-						onDeleteDocument={deleteDocument}
-						onReprocessDocument={reprocessDocument}
+		<AgentRuntimeProvider availableDocuments={availableDocuments}>
+			<PdfViewerProvider>
+				<SidebarProvider
+					style={
+						{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties
+					}
+					className={cn(
+						"relative",
+						isResizing &&
+							"[&_[data-slot=sidebar-gap]]:transition-none [&_[data-slot=sidebar-container]]:transition-none",
+					)}
+					onDragEnterCapture={handlePageDragEnter}
+					onDragOverCapture={handlePageDragOver}
+					onDragLeaveCapture={handlePageDragLeave}
+					onDropCapture={handlePageDrop}
+				>
+					{isPageDragging && (
+						<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 p-6 backdrop-blur-[2px]">
+							<div className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+								<DocumentDropTarget
+									intent="focus"
+									active={pageDropIntent === "focus" || pageDropIntent === null}
+									icon={<FileText className="size-5" />}
+									title="Add to focus documents"
+									description="Pin PDFs to this chat so the agent gives them extra attention"
+								/>
+								<DocumentDropTarget
+									intent="library"
+									active={pageDropIntent === "library"}
+									icon={<FolderOpen className="size-5" />}
+									title="Add to library"
+									description="Store PDFs across chats without making them focus documents"
+								/>
+							</div>
+						</div>
+					)}
+					<ThreadSidebar
+						onResizeStart={handleResizeStart}
+						isResizing={isResizing}
 					/>
-				</div>
-			</SidebarInset>
-		</SidebarProvider>
+
+					<SidebarInset className="h-screen min-h-0 overflow-hidden">
+						<header className="flex h-12 shrink-0 items-center gap-2 border-b border-neutral-200 bg-white px-3">
+							<SidebarTrigger className="-ml-1" />
+							<Separator orientation="vertical" />
+							<h1 className="truncate text-sm font-medium text-neutral-700">
+								Document Q&amp;A
+							</h1>
+						</header>
+
+						<div className="flex min-h-0 flex-1">
+							<main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+								<Thread />
+							</main>
+
+							<DocumentPanel
+								focusDocuments={focusDocuments}
+								libraryDocuments={libraryDocuments}
+								loading={documentsLoading}
+								uploading={uploading}
+								error={documentsError}
+								selection={selection}
+								onUpload={handleUpload}
+								onUploadToLibrary={handleLibraryUpload}
+								onAddToFocus={addToFocus}
+								onRemoveFromFocus={removeFromFocus}
+								onDeleteDocument={deleteDocument}
+								onReprocessDocument={reprocessDocument}
+							/>
+						</div>
+					</SidebarInset>
+				</SidebarProvider>
+			</PdfViewerProvider>
+		</AgentRuntimeProvider>
 	);
 }
 

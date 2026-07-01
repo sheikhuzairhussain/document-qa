@@ -1,4 +1,5 @@
 import { ASSISTANT_ID, agentsClient } from "@/lib/agents";
+import { normalizeAvailableDocuments } from "@/lib/available-documents";
 import {
 	AVAILABLE_DOCUMENTS_KEY,
 	FOCUS_DOCUMENTS_KEY,
@@ -6,7 +7,7 @@ import {
 	readFocusDocuments,
 } from "@/lib/focus-documents";
 import { langGraphThreadListAdapter } from "@/lib/langgraph-thread-list-adapter";
-import { getAvailableDocuments } from "@/lib/rag-selection";
+import type { AvailableDocuments } from "@/types";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import {
 	type LangChainMessage,
@@ -17,6 +18,7 @@ import {
 	type PropsWithChildren,
 	createContext,
 	useContext,
+	useMemo,
 	useState,
 } from "react";
 
@@ -48,42 +50,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 type RunsStream = typeof agentsClient.runs.stream;
 
-const documentScopedClient = {
-	runs: {
-		stream: (async (
-			threadId: string | null,
-			assistantId: string,
-			payload?: unknown,
-		) => {
-			const focusDocumentIds =
-				typeof threadId === "string" ? await getFocusDocumentIds(threadId) : [];
-			const availableDocuments = getAvailableDocuments() ?? [
-				...focusDocumentIds,
-			];
-			const payloadRecord = isRecord(payload) ? payload : {};
-			const context = isRecord(payloadRecord.context)
-				? payloadRecord.context
-				: {};
-			const scopedPayload = {
-				...payloadRecord,
-				context: {
-					...context,
-					[FOCUS_DOCUMENTS_KEY]: [...focusDocumentIds],
-					[AVAILABLE_DOCUMENTS_KEY]:
-						availableDocuments === "all" ? "all" : [...availableDocuments],
-				},
-			} as never;
-			return threadId === null
-				? agentsClient.runs.stream(null, assistantId, scopedPayload)
-				: agentsClient.runs.stream(threadId, assistantId, scopedPayload);
-		}) as unknown as RunsStream,
-	},
-};
+function createDocumentScopedClient(availableDocuments: AvailableDocuments) {
+	const normalizedAvailableDocuments =
+		normalizeAvailableDocuments(availableDocuments);
 
-const streamMessages = unstable_createLangGraphStream({
-	client: documentScopedClient,
-	assistantId: ASSISTANT_ID,
-});
+	return {
+		runs: {
+			stream: (async (
+				threadId: string | null,
+				assistantId: string,
+				payload?: unknown,
+			) => {
+				const focusDocumentIds =
+					typeof threadId === "string"
+						? await getFocusDocumentIds(threadId)
+						: [];
+				const payloadRecord = isRecord(payload) ? payload : {};
+				const context = isRecord(payloadRecord.context)
+					? payloadRecord.context
+					: {};
+				const scopedPayload = {
+					...payloadRecord,
+					context: {
+						...context,
+						[FOCUS_DOCUMENTS_KEY]: [...focusDocumentIds],
+						[AVAILABLE_DOCUMENTS_KEY]:
+							normalizedAvailableDocuments === "all"
+								? "all"
+								: [...normalizedAvailableDocuments],
+					},
+				} as never;
+				return threadId === null
+					? agentsClient.runs.stream(null, assistantId, scopedPayload)
+					: agentsClient.runs.stream(threadId, assistantId, scopedPayload);
+			}) as unknown as RunsStream,
+		},
+	};
+}
 
 /** Loads an existing Aegra thread's message history when the user switches to
  * it. Messages live under `state.values.messages` in the graph state. */
@@ -94,6 +97,21 @@ async function loadThread(externalId: string) {
 }
 
 const ActiveThreadContext = createContext<string | null>(null);
+const SetActiveThreadContext = createContext<
+	((threadId: string | null) => void) | null
+>(null);
+
+export function ActiveThreadProvider({ children }: PropsWithChildren) {
+	const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+	return (
+		<ActiveThreadContext.Provider value={activeThreadId}>
+			<SetActiveThreadContext.Provider value={setActiveThreadId}>
+				{children}
+			</SetActiveThreadContext.Provider>
+		</ActiveThreadContext.Provider>
+	);
+}
 
 /**
  * The Aegra `thread_id` of the active chat, or `null` for a brand-new thread
@@ -104,13 +122,34 @@ export function useActiveThreadId(): string | null {
 	return useContext(ActiveThreadContext);
 }
 
+function useSetActiveThreadId() {
+	const setActiveThreadId = useContext(SetActiveThreadContext);
+	if (!setActiveThreadId) {
+		throw new Error(
+			"useSetActiveThreadId must be used within ActiveThreadProvider",
+		);
+	}
+	return setActiveThreadId;
+}
+
 /**
  * Provides the assistant-ui runtime backed by the Aegra agents container.
  * Conversations are Aegra threads (via {@link langGraphThreadListAdapter}) and
  * assistant responses stream from the `qa-agent` LangGraph graph.
  */
-export function AgentRuntimeProvider({ children }: PropsWithChildren) {
-	const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+export function AgentRuntimeProvider({
+	availableDocuments,
+	children,
+}: PropsWithChildren<{ availableDocuments: AvailableDocuments }>) {
+	const setActiveThreadId = useSetActiveThreadId();
+	const streamMessages = useMemo(
+		() =>
+			unstable_createLangGraphStream({
+				client: createDocumentScopedClient(availableDocuments),
+				assistantId: ASSISTANT_ID,
+			}),
+		[availableDocuments],
+	);
 
 	const runtime = useLangGraphRuntime({
 		stream: streamMessages,
@@ -124,9 +163,7 @@ export function AgentRuntimeProvider({ children }: PropsWithChildren) {
 
 	return (
 		<AssistantRuntimeProvider runtime={runtime}>
-			<ActiveThreadContext.Provider value={activeThreadId}>
-				{children}
-			</ActiveThreadContext.Provider>
+			{children}
 		</AssistantRuntimeProvider>
 	);
 }

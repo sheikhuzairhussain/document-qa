@@ -87,7 +87,6 @@ services:
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
-      - ./frontend/tailwind.config.js:/app/tailwind.config.js
       - ./frontend/vite.config.ts:/app/vite.config.ts
       - ./frontend/tsconfig.json:/app/tsconfig.json
       - ./frontend/biome.json:/app/biome.json
@@ -133,6 +132,7 @@ services:
       # is read automatically by the google-genai SDK for query embeddings.
       RAG_DATABASE_URL: postgresql://orbital:orbital@db:5432/orbital_takehome
       EMBEDDING_MODEL: gemini-embedding-2
+      EMBEDDING_DIM: 1536
     depends_on:
       agents-db:
         condition: service_healthy

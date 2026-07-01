@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from deepagents import (
     create_deep_agent as _create_deep_agent,  # pyright: ignore[reportUnknownVariableType]
@@ -8,7 +8,20 @@ from qa_agent.context import AgentContext
 from qa_agent.middleware import FocusDocumentsMiddleware
 from qa_agent.tools import read_document, search_documents
 
-create_deep_agent = cast(Any, _create_deep_agent)
+
+class DeepAgentFactory(Protocol):
+    def __call__(
+        self,
+        *,
+        model: str,
+        tools: list[Any],
+        system_prompt: str,
+        middleware: list[Any],
+        context_schema: type[AgentContext],
+    ) -> Any: ...
+
+
+create_deep_agent = cast(DeepAgentFactory, _create_deep_agent)
 
 INSTRUCTIONS = """\
 You are a document Q&A assistant for commercial real estate lawyers reviewing \

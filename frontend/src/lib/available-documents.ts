@@ -1,14 +1,9 @@
 import type { AvailableDocuments, Document } from "@/types";
 
-let availableDocuments: AvailableDocuments | null = null;
-
-export function setAvailableDocuments(documents: AvailableDocuments): void {
-	availableDocuments =
-		documents === "all" ? "all" : [...new Set(documents.filter(Boolean))];
-}
-
-export function getAvailableDocuments(): AvailableDocuments | null {
-	return availableDocuments;
+export function normalizeAvailableDocuments(
+	documents: AvailableDocuments,
+): AvailableDocuments {
+	return documents === "all" ? "all" : [...new Set(documents.filter(Boolean))];
 }
 
 export function resolveAvailableDocuments({

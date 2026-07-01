@@ -11,8 +11,9 @@ Runs in the RQ ``ingestion`` worker. For each uploaded PDF it:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Literal, Protocol, cast
 
 import fitz  # type: ignore[reportMissingTypeStubs]
 import structlog
@@ -36,9 +37,33 @@ class PagePayload:
     text: str
     pdf_bytes: bytes
 
-def _extract_page_text(page: Any) -> str:
+
+class PdfPage(Protocol):
+    def get_text(
+        self,
+        option: Literal["blocks"],
+        *,
+        sort: bool = False,
+    ) -> Sequence[Sequence[object]]: ...
+
+
+class PdfDocument(Protocol):
+    def __len__(self) -> int: ...
+    def __getitem__(self, page_index: int) -> PdfPage: ...
+    def close(self) -> None: ...
+    def insert_pdf(
+        self,
+        doc: PdfDocument,
+        *,
+        from_page: int,
+        to_page: int,
+    ) -> None: ...
+    def tobytes(self) -> bytes: ...
+
+
+def _extract_page_text(page: PdfPage) -> str:
     """Extract sorted text blocks for a page-level searchable chunk."""
-    raw_blocks: list[Any] = page.get_text("blocks", sort=True)  # type: ignore[assignment]
+    raw_blocks = page.get_text("blocks", sort=True)
     text_parts: list[str] = []
 
     for raw_block in raw_blocks:
@@ -60,8 +85,8 @@ def _extract_page_text(page: Any) -> str:
     return "".join(text_parts)
 
 
-def _single_page_pdf_bytes(doc: Any, page_index: int) -> bytes:
-    single_page: Any = fitz.open()
+def _single_page_pdf_bytes(doc: PdfDocument, page_index: int) -> bytes:
+    single_page = cast(PdfDocument, fitz.open())
     try:
         single_page.insert_pdf(doc, from_page=page_index, to_page=page_index)
         return single_page.tobytes()
@@ -70,7 +95,7 @@ def _single_page_pdf_bytes(doc: Any, page_index: int) -> bytes:
 
 
 def _extract_pages(file_path: str) -> list[PagePayload]:
-    doc: Any = fitz.open(file_path)
+    doc = cast(PdfDocument, fitz.open(file_path))
     try:
         pages: list[PagePayload] = []
         for page_index in range(len(doc)):

@@ -105,9 +105,9 @@ class DocumentChunkText:
     headings: str | None
 
 
-# Dimensionality requested from gemini-embedding-2. Must match the ingestion
-# worker and the document_chunks.embedding vector(1536) column.
-_EMBEDDING_DIM = 1536
+def _embedding_dim() -> int:
+    # Must match the ingestion worker and the document_chunks.embedding column.
+    return int(os.environ.get("EMBEDDING_DIM", "1536"))
 
 
 def _embed_query(text: str) -> str:
@@ -128,7 +128,7 @@ def _embed_query(text: str) -> str:
             model=model,
             contents=prepared_query,
             config=types.EmbedContentConfig(
-                output_dimensionality=_EMBEDDING_DIM,
+                output_dimensionality=_embedding_dim(),
             ),
         )
     embedding = list((response.embeddings or [])[0].values or [])

@@ -1,7 +1,4 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import "@fontsource-variable/ibm-plex-sans";
-import "@fontsource/ibm-plex-mono";
-import "@fontsource/ibm-plex-serif";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -25,4 +27,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass
+    op.add_column("document_chunks", sa.Column("page_width", sa.Float(), nullable=True))
+    op.add_column("document_chunks", sa.Column("page_height", sa.Float(), nullable=True))
+    op.add_column("document_chunks", sa.Column("citation_blocks", sa.JSON(), nullable=True))

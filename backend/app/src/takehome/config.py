@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     upload_dir: str = "uploads"
     max_upload_size: int = 25 * 1024 * 1024  # 25MB
+    cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
 
     # Background job queue (RQ) — the ingestion worker reads from here.
     redis_url: str = "redis://redis:6379/0"
