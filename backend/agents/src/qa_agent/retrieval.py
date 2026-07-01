@@ -19,6 +19,7 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass
+from typing import Final
 
 from google import genai
 from google.genai import types
@@ -28,6 +29,8 @@ from psycopg.rows import DictRow, dict_row
 # RRF constant. 60 is the canonical default from the original RRF paper and the
 # value Timescale uses in its hybrid-search example.
 RRF_K = 60
+DEFAULT_EMBEDDING_MODEL: Final = "gemini-embedding-2"
+DEFAULT_EMBEDDING_DIM: Final = 1536
 
 # Index name created in migration 003; pg_textsearch's to_bm25query() resolves
 # the query against this specific BM25 index.
@@ -105,9 +108,17 @@ class DocumentChunkText:
     headings: str | None
 
 
-def _embedding_dim() -> int:
-    # Must match the ingestion worker and the document_chunks.embedding column.
-    return int(os.environ.get("EMBEDDING_DIM", "1536"))
+@dataclass(frozen=True)
+class EmbeddingSettings:
+    model: str
+    dimensions: int
+
+
+def _embedding_settings() -> EmbeddingSettings:
+    return EmbeddingSettings(
+        model=os.environ.get("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
+        dimensions=int(os.environ.get("EMBEDDING_DIM", str(DEFAULT_EMBEDDING_DIM))),
+    )
 
 
 def _embed_query(text: str) -> str:
@@ -121,21 +132,46 @@ def _embed_query(text: str) -> str:
     LangGraph may execute several tool calls in parallel. Keep the Gemini client
     local to this call so parallel queries don't share a closable httpx client.
     """
-    model = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-2")
+    settings = _embedding_settings()
     prepared_query = f"task: question answering | query: {text}"
     with genai.Client() as client:
         response = client.models.embed_content(
-            model=model,
+            model=settings.model,
             contents=prepared_query,
             config=types.EmbedContentConfig(
-                output_dimensionality=_embedding_dim(),
+                output_dimensionality=settings.dimensions,
             ),
         )
-    embedding = list((response.embeddings or [])[0].values or [])
-    norm = math.sqrt(sum(x * x for x in embedding))
-    if norm:
-        embedding = [x / norm for x in embedding]
-    return "[" + ",".join(str(x) for x in embedding) + "]"
+    embedding = _embedding_values(response, settings)
+    return _vector_literal(embedding)
+
+
+def _embedding_values(
+    response: types.EmbedContentResponse,
+    settings: EmbeddingSettings,
+) -> list[float]:
+    embeddings = response.embeddings or []
+    if not embeddings:
+        raise RuntimeError("Embedding provider returned no query embedding.")
+
+    values = list(embeddings[0].values or [])
+    if len(values) != settings.dimensions:
+        raise RuntimeError(
+            "Embedding provider returned "
+            f"{len(values)} dimensions; expected {settings.dimensions}."
+        )
+    return _normalize(values)
+
+
+def _normalize(vector: list[float]) -> list[float]:
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm == 0.0:
+        return vector
+    return [value / norm for value in vector]
+
+
+def _vector_literal(vector: list[float]) -> str:
+    return "[" + ",".join(str(value) for value in vector) + "]"
 
 
 def _database_url() -> str:

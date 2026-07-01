@@ -21,9 +21,7 @@ def get_queue() -> Queue:
     """Lazily construct the RQ queue backed by Redis."""
     global _redis, _queue
     if _queue is None:
-        _redis = Redis.from_url(  # type: ignore[reportUnknownMemberType]
-            settings.redis_url
-        )
+        _redis = Redis.from_url(settings.redis_url)
         _queue = Queue(QUEUE_NAME, connection=_redis)
     return _queue
 
@@ -31,7 +29,7 @@ def get_queue() -> Queue:
 def enqueue_ingestion(document_id: str) -> None:
     """Enqueue a document for chunking + embedding by the ingestion worker."""
     queue = get_queue()
-    queue.enqueue(  # type: ignore[reportUnknownMemberType]
+    queue.enqueue(
         INGESTION_JOB,
         document_id,
         job_timeout=900,  # PDFs can be large; give page embedding room.

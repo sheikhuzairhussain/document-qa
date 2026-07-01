@@ -30,6 +30,7 @@ import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { DocumentMentionText } from "@/features/chat/components/document-mention-text";
+import { AssistantDownloads } from "@/features/citations/components/assistant-downloads";
 import { AssistantSources } from "@/features/citations/components/assistant-sources";
 import {
 	DocumentToolCall,
@@ -147,6 +148,7 @@ const AssistantMessage: FC = () => {
 				</MessagePrimitive.GroupedParts>
 				<MessageError />
 				<AssistantSources />
+				<AssistantDownloads />
 			</div>
 
 			<div

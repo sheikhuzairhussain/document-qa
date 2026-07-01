@@ -91,7 +91,7 @@ export const Composer: FC<{ availableDocuments: AvailableDocuments }> = ({
 			<ComposerPrimitive.AttachmentDropzone asChild>
 				<div
 					data-slot="aui_composer-shell"
-					className="border-border data-[dragging=true]:border-ring focus-within:border-ring/60 flex w-full items-center gap-1 rounded-xl border bg-muted/40 px-1.5 py-1.5 shadow-sm transition-colors focus-within:bg-background data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/40"
+					className="border-border data-[dragging=true]:border-ring focus-within:border-ring/60 flex w-full items-center gap-1 rounded-xl border bg-muted/40 px-1.5 py-1.5 transition-colors focus-within:bg-background data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/40"
 				>
 					<ComposerUpload />
 					<LexicalComposerInput

@@ -1,21 +1,4 @@
-from typing import Any, Protocol, cast
-
-from langchain.agents import (
-    create_agent as _create_agent,  # pyright: ignore[reportUnknownVariableType]
-)
-
-
-class AgentFactory(Protocol):
-    def __call__(
-        self,
-        *,
-        model: str,
-        tools: list[Any],
-        system_prompt: str,
-    ) -> Any: ...
-
-
-create_agent = cast(AgentFactory, _create_agent)
+from langchain.agents import create_agent
 
 INSTRUCTIONS = """\
 You generate concise chat titles.

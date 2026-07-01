@@ -23,9 +23,26 @@ export interface DocumentSource {
 	pages: number[];
 }
 
+export interface SandboxDownload {
+	id: string;
+	url: string;
+	filename: string;
+	extension: string;
+	kind: "pdf" | "word" | "spreadsheet" | "presentation" | "other";
+	expiresInSeconds: number;
+}
+
 interface DocumentSourcesArtifact {
 	type: typeof DOCUMENT_SOURCES_ARTIFACT_TYPE;
 	chunks: DocumentSourceChunk[];
+}
+
+export interface SandboxDownloadUrlArtifact {
+	type: "sandbox_download_url_v1";
+	file_path: string;
+	url: string | null;
+	expires_in_seconds: number;
+	error: string | null;
 }
 
 const CITATION_MARKER_OPEN = "[[";
@@ -77,6 +94,13 @@ export function extractSourceChunksFromArtifact(
 ): DocumentSourceChunk[] {
 	if (!isDocumentSourcesArtifact(artifact)) return [];
 	return artifact.chunks;
+}
+
+export function extractSandboxDownloadUrlArtifact(
+	artifact: unknown,
+): SandboxDownloadUrlArtifact | null {
+	if (!isSandboxDownloadUrlArtifact(artifact)) return null;
+	return artifact;
 }
 
 export function citationMarkerToHref(marker: CitationMarker): string {
@@ -288,6 +312,32 @@ export function extractDocumentSourcesFromParts(
 	}));
 }
 
+export function extractSandboxDownloadsFromParts(
+	parts: readonly unknown[],
+): SandboxDownload[] {
+	const downloads: SandboxDownload[] = [];
+	const seen = new Set<string>();
+
+	for (const part of parts) {
+		if (!isRecord(part) || part.type !== "tool-call") continue;
+		const artifact = extractSandboxDownloadUrlArtifact(part.artifact);
+		if (!artifact?.url || seen.has(artifact.url)) continue;
+		seen.add(artifact.url);
+		const filename = getSandboxFilename(artifact.file_path);
+		const extension = getFileExtension(filename);
+		downloads.push({
+			id: typeof part.toolCallId === "string" ? part.toolCallId : artifact.url,
+			url: artifact.url,
+			filename,
+			extension,
+			kind: getSandboxDownloadKind(extension),
+			expiresInSeconds: artifact.expires_in_seconds,
+		});
+	}
+
+	return downloads;
+}
+
 export function getSourceChunkById(
 	parts: readonly unknown[],
 	chunkId: string,
@@ -296,5 +346,37 @@ export function getSourceChunkById(
 		extractSourceChunksFromParts(parts).find(
 			(chunk) => chunk.chunk_id === chunkId,
 		) ?? null
+	);
+}
+
+function getSandboxFilename(filePath: string): string {
+	const normalizedPath = filePath.trim().replace(/\/+$/, "");
+	const filename = normalizedPath.split("/").pop()?.trim();
+	return filename || "Generated file";
+}
+
+function getFileExtension(filename: string): string {
+	const match = /\.([a-z0-9]+)$/i.exec(filename);
+	return match?.[1]?.toLowerCase() ?? "";
+}
+
+function getSandboxDownloadKind(extension: string): SandboxDownload["kind"] {
+	if (extension === "pdf") return "pdf";
+	if (extension === "doc" || extension === "docx") return "word";
+	if (extension === "xls" || extension === "xlsx") return "spreadsheet";
+	if (extension === "ppt" || extension === "pptx") return "presentation";
+	return "other";
+}
+
+function isSandboxDownloadUrlArtifact(
+	value: unknown,
+): value is SandboxDownloadUrlArtifact {
+	if (!isRecord(value)) return false;
+	return (
+		value.type === "sandbox_download_url_v1" &&
+		typeof value.file_path === "string" &&
+		(typeof value.url === "string" || value.url === null) &&
+		typeof value.expires_in_seconds === "number" &&
+		(typeof value.error === "string" || value.error === null)
 	);
 }

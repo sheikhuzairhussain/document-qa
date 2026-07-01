@@ -10,7 +10,8 @@ import {
 import type { DocumentChunkCitation } from "@/types";
 
 export interface PdfViewerRequest {
-	documentId: string;
+	documentId?: string;
+	url?: string;
 	filename: string;
 	pageNo?: number | null;
 	highlightText?: string;

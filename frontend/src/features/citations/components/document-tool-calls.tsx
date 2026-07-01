@@ -7,7 +7,21 @@ import {
 	type ToolCallMessagePartProps,
 	useAuiState,
 } from "@assistant-ui/react";
-import { ChevronDownIcon, FileSearchIcon, FileTextIcon } from "lucide-react";
+import {
+	BotIcon,
+	ChevronDownIcon,
+	DownloadIcon,
+	ExternalLinkIcon,
+	FilePenIcon,
+	FileSearchIcon,
+	FileTextIcon,
+	FolderOpenIcon,
+	ListTodoIcon,
+	type LucideIcon,
+	SaveIcon,
+	SearchIcon,
+	TerminalIcon,
+} from "lucide-react";
 import { type FC, type PropsWithChildren, useMemo } from "react";
 import {
 	Collapsible,
@@ -16,6 +30,7 @@ import {
 } from "@/components/ui/collapsible";
 import {
 	type DocumentSourceChunk,
+	extractSandboxDownloadUrlArtifact,
 	extractSourceChunksFromArtifact,
 } from "@/features/citations/citations";
 import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
@@ -29,13 +44,32 @@ type DocumentToolPart = ToolCallMessagePart & {
 	status: ToolCallMessagePartProps["status"];
 };
 
-type DocumentToolName = "search_documents" | "read_document";
+type DocumentToolName =
+	| "search_documents"
+	| "read_document"
+	| "get_download_url";
 
-type SearchPageTarget = {
+type FilesystemToolName =
+	| "ls"
+	| "read_file"
+	| "write_file"
+	| "edit_file"
+	| "glob"
+	| "grep"
+	| "execute";
+
+type AgentToolName =
+	| DocumentToolName
+	| FilesystemToolName
+	| "write_todos"
+	| "task";
+
+type SearchDocumentTarget = {
 	key: string;
 	documentId: string;
 	filename: string;
-	pageNo: number;
+	firstPage: number;
+	pages: number[];
 	pageLabel: string;
 };
 
@@ -50,7 +84,77 @@ const DOCUMENT_TOOL_LABELS = {
 		complete: "Read focus document",
 		error: "Focus document read failed",
 	},
+	get_download_url: {
+		running: "Preparing download...",
+		complete: "Download ready",
+		error: "Download unavailable",
+	},
 } as const;
+
+const FILESYSTEM_TOOL_UI = {
+	ls: {
+		Icon: FolderOpenIcon,
+		running: "Checking workspace...",
+		complete: "Checked workspace",
+		error: "Workspace check failed",
+	},
+	read_file: {
+		Icon: FileTextIcon,
+		running: "Reading workspace...",
+		complete: "Read workspace",
+		error: "Workspace read failed",
+	},
+	write_file: {
+		Icon: SaveIcon,
+		running: "Saving file...",
+		complete: "Saved file",
+		error: "File save failed",
+	},
+	edit_file: {
+		Icon: FilePenIcon,
+		running: "Updating file...",
+		complete: "Updated file",
+		error: "File update failed",
+	},
+	glob: {
+		Icon: SearchIcon,
+		running: "Finding files...",
+		complete: "Found files",
+		error: "File search failed",
+	},
+	grep: {
+		Icon: FileSearchIcon,
+		running: "Searching files...",
+		complete: "Searched files",
+		error: "File search failed",
+	},
+	execute: {
+		Icon: TerminalIcon,
+		running: "Running analysis...",
+		complete: "Ran analysis",
+		error: "Analysis failed",
+	},
+	write_todos: {
+		Icon: ListTodoIcon,
+		running: "Updating plan...",
+		complete: "Updated plan",
+		error: "Plan update failed",
+	},
+	task: {
+		Icon: BotIcon,
+		running: "Working in parallel...",
+		complete: "Finished parallel work",
+		error: "Parallel work failed",
+	},
+} as const satisfies Record<
+	Exclude<AgentToolName, DocumentToolName>,
+	{
+		Icon: LucideIcon;
+		running: string;
+		complete: string;
+		error: string;
+	}
+>;
 
 export const DocumentToolGroup: FC<
 	PropsWithChildren<{
@@ -64,7 +168,7 @@ export const DocumentToolGroup: FC<
 
 	if (
 		toolParts.length !== group.indices.length ||
-		toolParts.some((part) => !isDocumentToolName(part.toolName))
+		toolParts.some((part) => !isAgentToolName(part.toolName))
 	) {
 		return (
 			<div
@@ -88,6 +192,18 @@ export const DocumentToolGroup: FC<
 					return <DocumentSearchToolRun key={run.key} parts={run.parts} />;
 				}
 
+				if (run.toolName === "get_download_url") {
+					return run.parts.map((part) => (
+						<SandboxDownloadToolRow key={part.toolCallId} part={part} />
+					));
+				}
+
+				if (run.toolName !== "read_document") {
+					return run.parts.map((part) => (
+						<GenericAgentToolRow key={part.toolCallId} part={part} />
+					));
+				}
+
 				return run.parts.map((part) => (
 					<DocumentReadToolRow key={part.toolCallId} part={part} />
 				));
@@ -103,7 +219,7 @@ export const DocumentToolCall: FC<DocumentToolCallProps> = ({
 	artifact,
 	...props
 }) => {
-	if (!isDocumentToolName(toolName)) {
+	if (!isAgentToolName(toolName)) {
 		return (
 			<Fallback
 				toolName={toolName}
@@ -117,6 +233,14 @@ export const DocumentToolCall: FC<DocumentToolCallProps> = ({
 	const part = { toolName, status, artifact, ...props } as DocumentToolPart;
 	if (toolName === "search_documents") {
 		return <DocumentSearchToolRun parts={[part]} />;
+	}
+
+	if (toolName === "get_download_url") {
+		return <SandboxDownloadToolRow part={part} />;
+	}
+
+	if (toolName !== "read_document") {
+		return <GenericAgentToolRow part={part} />;
 	}
 
 	return <DocumentReadToolRow part={part} />;
@@ -139,51 +263,61 @@ const DocumentSearchToolRun: FC<{ parts: readonly DocumentToolPart[] }> = ({
 			? labels.error
 			: labels.complete;
 	const { openDocument } = usePdfViewer();
-	const pageTargets = useMemo(() => getSearchPageTargets(chunks), [chunks]);
+	const documentTargets = useMemo(
+		() => getSearchDocumentTargets(chunks),
+		[chunks],
+	);
+	const resultCount = documentTargets.reduce(
+		(count, target) => count + target.pages.length,
+		0,
+	);
 
 	return (
 		<Collapsible data-slot="aui-document-search-tool" className="group/search">
 			<CollapsibleTrigger
-				className={cn(documentToolRowClassName, "cursor-pointer")}
+				className={cn(flatToolRowClassName, interactiveFlatToolRowClassName)}
 			>
-				<DocumentToolRowIcon Icon={FileSearchIcon} />
 				<DocumentToolLabel label={label} running={isRunning} />
 				{!isRunning && (
 					<span className="text-muted-foreground/70 ms-auto shrink-0 text-xs">
-						{formatResultCount(pageTargets.length)}
+						{formatResultCount(resultCount)}
 					</span>
 				)}
-				<ChevronDownIcon className="size-3.5 shrink-0 transition-transform group-data-[state=open]/search:rotate-180" />
+				<ChevronDownIcon
+					className={cn(
+						"text-muted-foreground/70 size-3.5 shrink-0 transition-transform group-data-[state=open]/search:rotate-180",
+						isRunning ? "ms-auto" : "ms-0.5",
+					)}
+				/>
 			</CollapsibleTrigger>
 			<CollapsibleContent className="overflow-hidden">
-				<div className="border-border/40 bg-muted/10 mt-1 rounded-md border px-2 py-1.5">
-					{pageTargets.length > 0 ? (
-						<div className="flex flex-col gap-1">
-							{pageTargets.map((page) => (
+				<div className="mt-0.5 flex flex-col gap-0.5">
+					{documentTargets.length > 0 ? (
+						<div className="flex flex-col gap-0.5">
+							{documentTargets.map((target) => (
 								<button
-									key={page.key}
+									key={target.key}
 									type="button"
-									className="text-muted-foreground hover:bg-muted/60 hover:text-foreground flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs transition-colors"
+									className="text-muted-foreground/80 hover:text-foreground focus-visible:ring-ring/35 flex w-full cursor-pointer items-center gap-2 rounded-sm py-0.5 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
 									onClick={() =>
 										openDocument({
-											documentId: page.documentId,
-											filename: page.filename,
-											pageNo: page.pageNo,
+											documentId: target.documentId,
+											filename: target.filename,
+											pageNo: target.firstPage,
 										})
 									}
 								>
-									<FileTextIcon className="size-3.5 shrink-0" />
 									<span className="min-w-0 flex-1 truncate">
-										{page.filename}
+										{target.filename}
 									</span>
 									<span className="shrink-0 tabular-nums">
-										{page.pageLabel}
+										{target.pageLabel}
 									</span>
 								</button>
 							))}
 						</div>
 					) : (
-						<p className="text-muted-foreground/70 px-1.5 py-1 text-xs">
+						<p className="text-muted-foreground/70 py-0.5 text-xs">
 							No pages returned.
 						</p>
 					)}
@@ -213,7 +347,8 @@ const DocumentReadToolRow: FC<{ part: DocumentToolPart }> = ({ part }) => {
 			type="button"
 			data-slot="aui-document-tool-row"
 			className={cn(
-				documentToolRowClassName,
+				flatToolRowClassName,
+				focusTarget && interactiveFlatToolRowClassName,
 				"disabled:pointer-events-none disabled:opacity-70",
 			)}
 			disabled={!focusTarget}
@@ -236,10 +371,98 @@ const DocumentReadToolRow: FC<{ part: DocumentToolPart }> = ({ part }) => {
 	);
 };
 
-const documentToolRowClassName =
+const SandboxDownloadToolRow: FC<{ part: DocumentToolPart }> = ({ part }) => {
+	const artifact = extractSandboxDownloadUrlArtifact(part.artifact);
+	const isRunning =
+		part.status.type === "running" || part.status.type === "requires-action";
+	if (!isRunning && artifact?.url) return null;
+
+	const isError =
+		(part.status.type === "incomplete" && part.status.reason !== "cancelled") ||
+		(!isRunning && (artifact?.error ?? null) !== null);
+	const labels = DOCUMENT_TOOL_LABELS.get_download_url;
+	const label = isRunning
+		? labels.running
+		: isError
+			? labels.error
+			: labels.complete;
+	const content = (
+		<>
+			<BoxedToolRowIcon Icon={DownloadIcon} />
+			<DocumentToolLabel label={label} running={isRunning} />
+			{artifact?.url && (
+				<ExternalLinkIcon className="text-muted-foreground/60 ms-auto size-3.5 shrink-0" />
+			)}
+		</>
+	);
+
+	if (artifact?.url) {
+		return (
+			<a
+				data-slot="aui-document-tool-row"
+				className={cn(boxedDownloadToolRowClassName, "cursor-pointer")}
+				href={artifact.url}
+				target="_blank"
+				rel="noreferrer"
+			>
+				{content}
+			</a>
+		);
+	}
+
+	return (
+		<div
+			data-slot="aui-document-tool-row"
+			className={cn(boxedDownloadToolRowClassName, "opacity-80")}
+		>
+			{content}
+		</div>
+	);
+};
+
+const GenericAgentToolRow: FC<{ part: DocumentToolPart }> = ({ part }) => {
+	if (!isGenericAgentToolName(part.toolName)) return null;
+
+	const labels = FILESYSTEM_TOOL_UI[part.toolName];
+	const isRunning =
+		part.status.type === "running" || part.status.type === "requires-action";
+	const isError =
+		part.status.type === "incomplete" && part.status.reason !== "cancelled";
+	const label = isRunning
+		? labels.running
+		: isError
+			? labels.error
+			: labels.complete;
+
+	return (
+		<div
+			data-slot="aui-document-tool-row"
+			className={cn(flatToolRowClassName, "opacity-80")}
+		>
+			<DocumentToolRowIcon Icon={labels.Icon} />
+			<DocumentToolLabel label={label} running={isRunning} />
+		</div>
+	);
+};
+
+const flatToolRowClassName =
+	"text-muted-foreground flex w-full items-center gap-2 py-1 text-left text-xs transition-colors";
+
+const interactiveFlatToolRowClassName =
+	"cursor-pointer rounded-sm hover:text-foreground focus-visible:ring-ring/35 focus-visible:ring-2 focus-visible:outline-none";
+
+const boxedDownloadToolRowClassName =
 	"border-border/50 bg-muted/25 text-muted-foreground flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors";
 
-const DocumentToolRowIcon: FC<{ Icon: typeof FileSearchIcon }> = ({ Icon }) => {
+const DocumentToolRowIcon: FC<{ Icon: LucideIcon }> = ({ Icon }) => {
+	return (
+		<span className="flex size-4 shrink-0 items-center justify-center">
+			<Icon className="size-3.5" />
+		</span>
+	);
+};
+
+const BoxedToolRowIcon: FC<{ Icon: LucideIcon }> = ({ Icon }) => {
 	return (
 		<span className="border-border/50 bg-background flex size-6 shrink-0 items-center justify-center rounded-md border">
 			<Icon className="size-3.5" />
@@ -266,33 +489,68 @@ const DocumentToolLabel: FC<{ label: string; running: boolean }> = ({
 	);
 };
 
-function getSearchPageTargets(
+function getSearchDocumentTargets(
 	chunks: readonly DocumentSourceChunk[],
-): SearchPageTarget[] {
-	const byPage = new Map<string, SearchPageTarget>();
+): SearchDocumentTarget[] {
+	const byDocument = new Map<
+		string,
+		{
+			documentId: string;
+			filename: string;
+			pages: Set<number>;
+		}
+	>();
 
 	for (const chunk of chunks) {
 		if (chunk.page_no === null) continue;
-		const key = `${chunk.document_id}:${chunk.page_no}`;
-		if (byPage.has(key)) continue;
-		byPage.set(key, {
-			key,
+		const existing = byDocument.get(chunk.document_id);
+		if (existing) {
+			existing.pages.add(chunk.page_no);
+			continue;
+		}
+
+		byDocument.set(chunk.document_id, {
 			documentId: chunk.document_id,
 			filename: chunk.filename,
-			pageNo: chunk.page_no,
-			pageLabel: `p. ${chunk.page_no}`,
+			pages: new Set([chunk.page_no]),
 		});
 	}
 
-	return [...byPage.values()].sort((a, b) => {
-		const pageOrder = a.pageNo - b.pageNo;
-		if (pageOrder !== 0) return pageOrder;
-		return a.filename.localeCompare(b.filename);
-	});
+	return [...byDocument.values()]
+		.map((target) => {
+			const pages = [...target.pages].sort((a, b) => a - b);
+			const firstPage = pages[0];
+			if (firstPage === undefined) return null;
+			return {
+				key: target.documentId,
+				documentId: target.documentId,
+				filename: target.filename,
+				firstPage,
+				pages,
+				pageLabel: formatPageList(pages),
+			};
+		})
+		.filter((target) => target !== null)
+		.sort((a, b) => {
+			const pageOrder = a.firstPage - b.firstPage;
+			if (pageOrder !== 0) return pageOrder;
+			return a.filename.localeCompare(b.filename);
+		});
 }
 
 function formatResultCount(count: number): string {
 	return `${count} result${count === 1 ? "" : "s"}`;
+}
+
+function formatPageList(pages: readonly number[]): string {
+	if (pages.length === 0) return "";
+	return `p.${formatJoinedNumbers(pages)}`;
+}
+
+function formatJoinedNumbers(values: readonly number[]): string {
+	if (values.length <= 2) return values.join(" and ");
+	const head = values.slice(0, -1).join(", ");
+	return `${head} and ${values.at(-1)}`;
 }
 
 function isToolCallPart(value: unknown): value is DocumentToolPart {
@@ -310,7 +568,21 @@ function isToolCallPart(value: unknown): value is DocumentToolPart {
 }
 
 function isDocumentToolName(toolName: string): toolName is DocumentToolName {
-	return toolName === "search_documents" || toolName === "read_document";
+	return (
+		toolName === "search_documents" ||
+		toolName === "read_document" ||
+		toolName === "get_download_url"
+	);
+}
+
+function isGenericAgentToolName(
+	toolName: string,
+): toolName is Exclude<AgentToolName, DocumentToolName> {
+	return toolName in FILESYSTEM_TOOL_UI;
+}
+
+function isAgentToolName(toolName: string): toolName is AgentToolName {
+	return isDocumentToolName(toolName) || isGenericAgentToolName(toolName);
 }
 
 function getToolRunStatus(parts: readonly DocumentToolPart[]) {
@@ -336,12 +608,12 @@ function getToolRunStatus(parts: readonly DocumentToolPart[]) {
 function getDocumentToolRuns(parts: readonly DocumentToolPart[]) {
 	const runs: {
 		key: string;
-		toolName: DocumentToolName;
+		toolName: AgentToolName;
 		parts: DocumentToolPart[];
 	}[] = [];
 
 	for (const part of parts) {
-		if (!isDocumentToolName(part.toolName)) continue;
+		if (!isAgentToolName(part.toolName)) continue;
 		const previous = runs.at(-1);
 		if (
 			previous &&

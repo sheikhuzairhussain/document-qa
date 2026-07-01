@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from alembic import command
 from takehome.config import settings
+from takehome.web.routers import documents
 
 logger = structlog.get_logger()
 
@@ -35,7 +36,5 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-from takehome.web.routers import documents  # noqa: E402
 
 app.include_router(documents.router)

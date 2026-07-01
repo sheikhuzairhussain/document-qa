@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+import posixpath
+from typing import Literal, TypedDict
 
 import structlog
+from e2b import FileNotFoundException, FileType, InvalidArgumentException, SandboxException
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolRuntime
 
@@ -19,10 +21,16 @@ from qa_agent.retrieval import (
     get_document_chunks,
     hybrid_search,
 )
+from qa_agent.sandbox import (
+    DOWNLOAD_URL_EXPIRATION_SECONDS,
+    get_sandbox,
+    get_thread_id,
+)
 
 logger = structlog.get_logger()
 
 CITATION_MARKER_END = "]]"
+SANDBOX_HOME = "/home/user"
 
 
 class DocumentSourceChunk(TypedDict):
@@ -36,6 +44,14 @@ class DocumentSourceChunk(TypedDict):
 class DocumentSourcesArtifact(TypedDict):
     type: Literal["document_sources_v1"]
     chunks: list[DocumentSourceChunk]
+
+
+class SandboxDownloadUrlArtifact(TypedDict):
+    type: Literal["sandbox_download_url_v1"]
+    file_path: str
+    url: str | None
+    expires_in_seconds: int
+    error: str | None
 
 
 def _empty_artifact() -> DocumentSourcesArtifact:
@@ -62,6 +78,21 @@ def _artifact_for_chunks(
     return {
         "type": "document_sources_v1",
         "chunks": [_source_chunk(chunk) for chunk in chunks],
+    }
+
+
+def _download_url_artifact(
+    *,
+    file_path: str,
+    url: str | None = None,
+    error: str | None = None,
+) -> SandboxDownloadUrlArtifact:
+    return {
+        "type": "sandbox_download_url_v1",
+        "file_path": file_path,
+        "url": url,
+        "expires_in_seconds": DOWNLOAD_URL_EXPIRATION_SECONDS,
+        "error": error,
     }
 
 
@@ -139,7 +170,7 @@ def _format_document_chunks(chunks: list[DocumentChunkText]) -> str:
 @tool(parse_docstring=True, response_format="content_and_artifact")
 def search_documents(
     query: str,
-    runtime: ToolRuntime[AgentContext, Any],
+    runtime: ToolRuntime[AgentContext, object],
     document_ids: list[str] | None = None,
 ) -> tuple[str, DocumentSourcesArtifact]:
     """Search available legal documents for passages relevant to a query.
@@ -190,7 +221,7 @@ def search_documents(
 @tool(parse_docstring=True, response_format="content_and_artifact")
 def read_document(
     document_id: str,
-    runtime: ToolRuntime[AgentContext, Any],
+    runtime: ToolRuntime[AgentContext, object],
 ) -> tuple[str, DocumentSourcesArtifact]:
     """Read all indexed chunks for one available document.
 
@@ -220,9 +251,78 @@ def read_document(
     return _format_document_chunks(chunks), _artifact_for_chunks(chunks)
 
 
+@tool(parse_docstring=True, response_format="content_and_artifact")
+def get_download_url(
+    file_path: str,
+    runtime: ToolRuntime[AgentContext, object],
+) -> tuple[str, SandboxDownloadUrlArtifact]:
+    """Create a pre-signed download URL for a file in this run's sandbox.
+
+    Use this after creating or exporting a file in the sandbox when the user
+    needs to download it. Relative paths resolve under /home/user.
+
+    Args:
+        file_path: Path to the file inside the E2B sandbox.
+    """
+    try:
+        normalized_path = _normalize_sandbox_file_path(file_path)
+    except ValueError as exc:
+        message = str(exc)
+        return message, _download_url_artifact(file_path=file_path, error=message)
+
+    thread_id = get_thread_id(runtime.config)
+    if thread_id is None:
+        message = (
+            "No sandbox is available for this run, so a download URL cannot be "
+            "created. Run this tool only after sandbox-backed file work."
+        )
+        return message, _download_url_artifact(file_path=normalized_path, error=message)
+
+    try:
+        sandbox = get_sandbox(thread_id)
+        info = sandbox.files.get_info(normalized_path)
+        if info.type == FileType.DIR:
+            message = f"{normalized_path} is a directory. Provide a file path instead."
+            return (
+                message,
+                _download_url_artifact(file_path=normalized_path, error=message),
+            )
+
+        url = sandbox.download_url(
+            normalized_path,
+            use_signature_expiration=DOWNLOAD_URL_EXPIRATION_SECONDS,
+        )
+    except FileNotFoundException:
+        message = f"{normalized_path} does not exist in the sandbox."
+        return message, _download_url_artifact(file_path=normalized_path, error=message)
+    except (InvalidArgumentException, SandboxException, RuntimeError) as exc:
+        message = f"Could not create a download URL for {normalized_path}: {exc}"
+        logger.warning(
+            "sandbox_download_url_failed",
+            file_path=normalized_path,
+            error=str(exc),
+        )
+        return message, _download_url_artifact(file_path=normalized_path, error=message)
+
+    logger.info(
+        "sandbox_download_url_created",
+        thread_id=thread_id,
+        file_path=normalized_path,
+        expires_in_seconds=DOWNLOAD_URL_EXPIRATION_SECONDS,
+    )
+    return (
+        (
+            f"Download ready for {normalized_path}. The UI will render the "
+            f"download link from the tool artifact. Do not include the URL in "
+            f"the assistant response text."
+        ),
+        _download_url_artifact(file_path=normalized_path, url=url),
+    )
+
+
 def _effective_document_ids(
     requested_document_ids: list[str] | None,
-    runtime: ToolRuntime[AgentContext, Any],
+    runtime: ToolRuntime[AgentContext, object],
 ) -> list[str] | None:
     available_documents = get_available_documents(runtime.context)
     if available_documents is None or available_documents == SELECT_ALL_DOCUMENTS:
@@ -240,9 +340,24 @@ def _effective_document_ids(
 
 def _is_document_available(
     document_id: str,
-    runtime: ToolRuntime[AgentContext, Any],
+    runtime: ToolRuntime[AgentContext, object],
 ) -> bool:
     available_documents = get_available_documents(runtime.context)
     if available_documents is None or available_documents == SELECT_ALL_DOCUMENTS:
         return True
     return document_id in available_documents
+
+
+def _normalize_sandbox_file_path(file_path: str) -> str:
+    stripped_path = file_path.strip()
+    if not stripped_path:
+        msg = "Provide a non-empty sandbox file path."
+        raise ValueError(msg)
+
+    if stripped_path == "~" or stripped_path.startswith("~/"):
+        stripped_path = posixpath.join(SANDBOX_HOME, stripped_path.removeprefix("~/"))
+
+    if stripped_path.startswith("/"):
+        return posixpath.normpath(stripped_path)
+
+    return posixpath.normpath(posixpath.join(SANDBOX_HOME, stripped_path))

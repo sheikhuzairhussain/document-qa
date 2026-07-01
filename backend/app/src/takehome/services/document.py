@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from pathlib import PurePath
 
 import structlog
 from fastapi import UploadFile
@@ -17,6 +18,9 @@ from takehome.db.models import (
 from takehome.services.queue import enqueue_ingestion
 
 logger = structlog.get_logger()
+
+DEFAULT_DOCUMENT_FILENAME = "document.pdf"
+MAX_STORED_FILENAME_LENGTH = 180
 
 
 async def upload_document(session: AsyncSession, file: UploadFile) -> Document:
@@ -45,7 +49,7 @@ async def upload_document(session: AsyncSession, file: UploadFile) -> Document:
         )
 
     # Generate a unique filename to avoid collisions
-    original_filename = file.filename or "document.pdf"
+    original_filename = _safe_display_filename(file.filename)
     unique_name = f"{uuid.uuid4().hex}_{original_filename}"
     file_path = os.path.join(settings.upload_dir, unique_name)
 
@@ -115,7 +119,15 @@ async def reprocess_document(session: AsyncSession, document_id: str) -> Documen
     await session.commit()
     await session.refresh(document)
 
-    enqueue_ingestion(document.id)
+    try:
+        enqueue_ingestion(document.id)
+    except Exception:
+        logger.exception("Failed to enqueue document reprocessing", document_id=document.id)
+        document.status = DOCUMENT_STATUS_FAILED
+        document.error = "Could not enqueue document for processing."
+        await session.commit()
+        await session.refresh(document)
+
     return document
 
 
@@ -141,3 +153,26 @@ async def delete_document(session: AsyncSession, document_id: str) -> bool:
             logger.warning("Failed to remove document file from disk", path=file_path)
 
     return True
+
+
+def _safe_display_filename(filename: str | None) -> str:
+    """Return a filesystem-safe filename while preserving a useful display name."""
+    candidate = PurePath(filename or DEFAULT_DOCUMENT_FILENAME).name.strip()
+    if not candidate:
+        candidate = DEFAULT_DOCUMENT_FILENAME
+
+    sanitized = "".join(
+        character if character.isprintable() and character not in {"/", "\\", "\0"} else "_"
+        for character in candidate
+    ).strip(". ")
+    if not sanitized:
+        sanitized = DEFAULT_DOCUMENT_FILENAME
+
+    if not sanitized.lower().endswith(".pdf"):
+        sanitized = f"{sanitized}.pdf"
+
+    if len(sanitized) <= MAX_STORED_FILENAME_LENGTH:
+        return sanitized
+
+    stem = sanitized[:-4].rstrip(". ")
+    return f"{stem[: MAX_STORED_FILENAME_LENGTH - 4]}.pdf"

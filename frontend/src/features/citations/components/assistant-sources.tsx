@@ -3,34 +3,22 @@
 import { useAuiState } from "@assistant-ui/react";
 import { FileTextIcon } from "lucide-react";
 import { type FC, useMemo } from "react";
+import { useCurrentTurnParts } from "@/features/chat/hooks/use-current-turn-parts";
 import { extractDocumentSourcesFromParts } from "@/features/citations/citations";
 import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
 
 export const AssistantSources: FC = () => {
 	const messageParts = useAuiState((s) => s.message.parts);
-	const messageIndex = useAuiState((s) => s.message.index);
 	const isMessageRunning = useAuiState(
 		(s) => s.message.status?.type === "running",
 	);
-	const threadMessages = useAuiState((s) => s.thread.messages);
 	const hasAnswerText = messageParts.some(
 		(part) =>
 			part.type === "text" &&
 			typeof part.text === "string" &&
 			part.text.trim().length > 0,
 	);
-	const turnParts = useMemo(() => {
-		let startIndex = 0;
-		for (let index = messageIndex; index >= 0; index -= 1) {
-			if (threadMessages[index]?.role === "user") {
-				startIndex = index + 1;
-				break;
-			}
-		}
-		return threadMessages
-			.slice(startIndex, messageIndex + 1)
-			.flatMap((message) => message.parts);
-	}, [messageIndex, threadMessages]);
+	const turnParts = useCurrentTurnParts();
 	const sources = useMemo(
 		() => extractDocumentSourcesFromParts(turnParts),
 		[turnParts],

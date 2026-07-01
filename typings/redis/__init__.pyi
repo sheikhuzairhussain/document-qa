@@ -1,0 +1,3 @@
+class Redis:
+    @classmethod
+    def from_url(cls, url: str) -> Redis: ...

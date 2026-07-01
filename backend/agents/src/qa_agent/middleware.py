@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 import structlog
-from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
+from langchain.agents.middleware import AgentMiddleware, AgentState, ModelRequest, ModelResponse
 from langchain_core.messages import SystemMessage
 
 from qa_agent.context import AgentContext, get_focus_document_ids
@@ -15,21 +14,21 @@ from qa_agent.retrieval import DocumentInfo, get_documents
 logger = structlog.get_logger()
 
 
-class FocusDocumentsMiddleware(AgentMiddleware[Any, AgentContext, Any]):
+class FocusDocumentsMiddleware(AgentMiddleware[AgentState[object], AgentContext, object]):
     """Inject hidden instructions describing the chat's focus documents."""
 
     def wrap_model_call(
         self,
         request: ModelRequest[AgentContext],
-        handler: Callable[[ModelRequest[AgentContext]], ModelResponse[Any]],
-    ) -> ModelResponse[Any]:
+        handler: Callable[[ModelRequest[AgentContext]], ModelResponse[object]],
+    ) -> ModelResponse[object]:
         return handler(self._with_focus_documents(request))
 
     async def awrap_model_call(
         self,
         request: ModelRequest[AgentContext],
-        handler: Callable[[ModelRequest[AgentContext]], Awaitable[ModelResponse[Any]]],
-    ) -> ModelResponse[Any]:
+        handler: Callable[[ModelRequest[AgentContext]], Awaitable[ModelResponse[object]]],
+    ) -> ModelResponse[object]:
         return await handler(self._with_focus_documents(request))
 
     def _with_focus_documents(
@@ -126,7 +125,11 @@ def _format_hidden_context(
                 "short exact supporting span from that chunk, then copy "
                 "citation_marker_end."
             ),
-            "Do not expose internal document ids unless the user explicitly asks.",
+            (
+                "Use ids only privately for tool calls and citation markers. Never "
+                "expose internal document ids, chunk ids, package names, file paths, "
+                "or other implementation details in user-facing prose."
+            ),
             "[/Hidden focus document context]",
         ]
     )

@@ -120,7 +120,10 @@ export default function PdfViewerDialog({
 		[viewportRef],
 	);
 
-	const requestedDocumentId = request.documentId;
+	const pdfFile =
+		request.url ??
+		(request.documentId ? getDocumentUrl(request.documentId) : "");
+	const requestedDocumentKey = request.url ?? request.documentId ?? "";
 	const requestedPage = request.pageNo ?? 1;
 	useEffect(() => {
 		setCurrentPage(Math.max(1, requestedPage));
@@ -128,14 +131,14 @@ export default function PdfViewerDialog({
 	}, [requestedPage]);
 
 	useEffect(() => {
-		if (!requestedDocumentId) return;
+		if (!requestedDocumentKey) return;
 		setZoom(1);
 		setPdfError(null);
 		setFindQuery("");
 		setFindTargets([]);
 		setActiveFindIndex(0);
 		pageTextContentRef.current = null;
-	}, [requestedDocumentId]);
+	}, [requestedDocumentKey]);
 
 	const availablePageWidth = viewportWidth > 0 ? viewportWidth - 48 : 820;
 	const basePageWidth = Math.max(280, Math.min(availablePageWidth, 820));
@@ -147,8 +150,8 @@ export default function PdfViewerDialog({
 		!hasFindQuery && highlightPage !== null && currentPage === highlightPage
 			? highlightText
 			: "";
-	const highlightKey = `${requestedDocumentId}:${currentPage}:${activeHighlightText}`;
-	const pageResetKey = `${requestedDocumentId}:${currentPage}`;
+	const highlightKey = `${requestedDocumentKey}:${currentPage}:${activeHighlightText}`;
+	const pageResetKey = `${requestedDocumentKey}:${currentPage}`;
 	const zoomLabel = `${Math.round(zoom * 100)}%`;
 	const findMatchCount = findTargets.length;
 	const activeFindOrdinal = findMatchCount === 0 ? 0 : activeFindIndex + 1;
@@ -414,7 +417,7 @@ export default function PdfViewerDialog({
 					)}
 
 					<PDFDocument
-						file={getDocumentUrl(request.documentId)}
+						file={pdfFile}
 						onLoadSuccess={({ numPages: pages }) => {
 							setNumPages(pages);
 							setCurrentPage((page) => Math.min(Math.max(1, page), pages));
@@ -437,7 +440,7 @@ export default function PdfViewerDialog({
 							}}
 						>
 							<Page
-								key={`${request.documentId}:${currentPage}`}
+								key={`${requestedDocumentKey}:${currentPage}`}
 								pageNumber={currentPage}
 								width={pageRenderWidth}
 								customTextRenderer={renderTextLayerItem}

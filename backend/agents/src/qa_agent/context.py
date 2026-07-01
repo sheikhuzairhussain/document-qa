@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal, TypedDict, cast
+from typing import Literal, TypedDict, TypeGuard
 
 FOCUS_DOCUMENTS_KEY = "focus_documents"
 AVAILABLE_DOCUMENTS_KEY = "available_documents"
@@ -20,20 +20,26 @@ class AgentContext(TypedDict, total=False):
 
 
 def _string_list(value: object) -> list[str]:
-    if not isinstance(value, list):
+    if not _is_object_list(value):
         return []
 
-    items = cast("list[object]", value)
-    return [doc_id for doc_id in items if isinstance(doc_id, str) and doc_id]
+    return [doc_id for doc_id in value if isinstance(doc_id, str) and doc_id]
+
+
+def _is_object_list(value: object) -> TypeGuard[list[object]]:
+    return isinstance(value, list)
+
+
+def _is_context_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(value, Mapping)
 
 
 def get_focus_document_ids(context: object) -> list[str] | None:
     """Return focus document ids, preserving missing vs empty context."""
-    if not isinstance(context, Mapping) or FOCUS_DOCUMENTS_KEY not in context:
+    if not _is_context_mapping(context) or FOCUS_DOCUMENTS_KEY not in context:
         return None
 
-    mapping = cast("Mapping[str, object]", context)
-    return _string_list(mapping[FOCUS_DOCUMENTS_KEY])
+    return _string_list(context[FOCUS_DOCUMENTS_KEY])
 
 
 def get_available_documents(context: object) -> AvailableDocuments | None:
@@ -42,11 +48,10 @@ def get_available_documents(context: object) -> AvailableDocuments | None:
     ``"all"`` means no document-id SQL filter. A list is an explicit allow-list.
     Invalid supplied values fail closed as an empty allow-list.
     """
-    if not isinstance(context, Mapping) or AVAILABLE_DOCUMENTS_KEY not in context:
+    if not _is_context_mapping(context) or AVAILABLE_DOCUMENTS_KEY not in context:
         return None
 
-    mapping = cast("Mapping[str, object]", context)
-    value: object = mapping[AVAILABLE_DOCUMENTS_KEY]
+    value = context[AVAILABLE_DOCUMENTS_KEY]
     if value == SELECT_ALL_DOCUMENTS:
         return SELECT_ALL_DOCUMENTS
 
