@@ -13,7 +13,6 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import { cn, relativeTime } from "@/lib/utils";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -23,8 +22,8 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from "./ui/alert-dialog";
-import { Button } from "./ui/button";
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -32,14 +31,14 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "./ui/dialog";
+} from "@/components/ui/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Input } from "./ui/input";
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
 	Sidebar,
 	SidebarContent,
@@ -49,7 +48,8 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
-} from "./ui/sidebar";
+} from "@/components/ui/sidebar";
+import { cn, relativeTime } from "@/lib/utils";
 
 interface ThreadSidebarProps {
 	onResizeStart: (e: React.MouseEvent) => void;

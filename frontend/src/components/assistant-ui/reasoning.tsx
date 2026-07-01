@@ -18,12 +18,12 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { MarkdownText } from "@/features/citations/components/markdown-text";
 import { cn } from "@/lib/utils";
 
 const ANIMATION_DURATION = 200;

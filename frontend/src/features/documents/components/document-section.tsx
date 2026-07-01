@@ -1,8 +1,12 @@
 import type { ReactNode } from "react";
-import type { Document } from "../types";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { Document } from "@/types";
 import { DocumentRow } from "./document-row";
-import { Checkbox } from "./ui/checkbox";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface DocumentSectionProps {
 	title: string;

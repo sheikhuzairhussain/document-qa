@@ -4,12 +4,12 @@ import type {
 } from "@assistant-ui/react";
 import type { Thread } from "@langchain/langgraph-sdk";
 import { createAssistantStream } from "assistant-stream";
-import { agentsClient } from "./agents";
 import {
 	focusDocumentsMetadata,
 	focusDocumentsStore,
 	updateThreadMetadata,
-} from "./focus-documents";
+} from "@/features/focus-documents/focus-documents-store";
+import { agentsClient } from "@/lib/agents";
 
 /** Aegra/LangGraph threads have no native title or archive flag, so we stash
  * both in thread metadata under these keys. */

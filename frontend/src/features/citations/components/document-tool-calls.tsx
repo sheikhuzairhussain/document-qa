@@ -9,7 +9,6 @@ import {
 } from "@assistant-ui/react";
 import { ChevronDownIcon, FileSearchIcon, FileTextIcon } from "lucide-react";
 import { type FC, type PropsWithChildren, useMemo } from "react";
-import { usePdfViewer } from "@/components/pdf-viewer";
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -18,7 +17,8 @@ import {
 import {
 	type DocumentSourceChunk,
 	extractSourceChunksFromArtifact,
-} from "@/lib/citations";
+} from "@/features/citations/citations";
+import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
 import { cn } from "@/lib/utils";
 
 type DocumentToolCallProps = ToolCallMessagePartProps & {

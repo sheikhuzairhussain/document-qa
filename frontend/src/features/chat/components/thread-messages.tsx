@@ -1,53 +1,26 @@
-"use client";
-
 import {
 	ActionBarMorePrimitive,
 	ActionBarPrimitive,
-	type AssistantState,
 	AuiIf,
 	BranchPickerPrimitive,
 	ComposerPrimitive,
 	ErrorPrimitive,
 	groupPartByType,
 	MessagePrimitive,
-	SuggestionPrimitive,
-	ThreadPrimitive,
-	type ToolCallMessagePartComponent,
 	useAuiState,
 } from "@assistant-ui/react";
 import {
-	ArrowDownIcon,
 	CheckIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	CopyIcon,
 	DownloadIcon,
-	FileSearchIcon,
 	MoreHorizontalIcon,
-	PaperclipIcon,
 	PencilIcon,
 	RefreshCwIcon,
-	SendHorizontalIcon,
-	SquareIcon,
 } from "lucide-react";
-import {
-	type ComponentType,
-	createContext,
-	type FC,
-	type PropsWithChildren,
-	useContext,
-	useRef,
-} from "react";
-import { AssistantSources } from "@/components/assistant-ui/assistant-sources";
-import {
-	ComposerAttachments,
-	UserMessageAttachments,
-} from "@/components/assistant-ui/attachment";
-import {
-	DocumentToolCall,
-	DocumentToolGroup,
-} from "@/components/assistant-ui/document-tool-calls";
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+import { type FC, useContext } from "react";
+import { UserMessageAttachments } from "@/components/assistant-ui/attachment";
 import {
 	Reasoning,
 	ReasoningContent,
@@ -57,112 +30,17 @@ import {
 } from "@/components/assistant-ui/reasoning";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { useDocumentsContext } from "@/components/documents-context";
 import { Button } from "@/components/ui/button";
-import { getPdfFiles } from "@/lib/files";
+import { AssistantSources } from "@/features/citations/components/assistant-sources";
+import {
+	DocumentToolCall,
+	DocumentToolGroup,
+} from "@/features/citations/components/document-tool-calls";
+import { MarkdownText } from "@/features/citations/components/markdown-text";
 import { cn } from "@/lib/utils";
+import { ThreadComponentsContext } from "./thread-components-context";
 
-export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
-
-/**
- * Optional component overrides for the thread. `AssistantMessage` and
- * `Welcome` replace whole sections; the remaining slots override how the
- * assistant message renders tool calls and part groups. Tool UIs registered
- * by name (toolkit `render`, `useAssistantDataUI`) take precedence over
- * `ToolFallback`.
- */
-export type ThreadComponents = {
-	AssistantMessage?: ComponentType | undefined;
-	Welcome?: ComponentType | undefined;
-	ToolFallback?: ToolCallMessagePartComponent | undefined;
-	ToolGroup?:
-		| ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>>
-		| undefined;
-	ReasoningGroup?:
-		| ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>>
-		| undefined;
-};
-
-export type ThreadProps = {
-	components?: ThreadComponents | undefined;
-};
-
-const EMPTY_COMPONENTS: ThreadComponents = {};
-
-const ThreadComponentsContext =
-	createContext<ThreadComponents>(EMPTY_COMPONENTS);
-
-// Startup exposes a loading placeholder thread; treat it as a new chat so
-// the composer mounts centered. Loads after startup keep the docked layout.
-const isNewChatView = (s: AssistantState) =>
-	s.thread.messages.length === 0 &&
-	(!s.thread.isLoading || s.threads.isLoading);
-
-export const Thread: FC<ThreadProps> = ({ components = EMPTY_COMPONENTS }) => {
-	const isEmpty = useAuiState(isNewChatView);
-
-	return (
-		<ThreadComponentsContext.Provider value={components}>
-			<ThreadRoot isEmpty={isEmpty} />
-		</ThreadComponentsContext.Provider>
-	);
-};
-
-const ThreadRoot: FC<{ isEmpty: boolean }> = ({ isEmpty }) => {
-	const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
-
-	return (
-		<ThreadPrimitive.Root
-			className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
-			style={{
-				["--thread-max-width" as string]: "44rem",
-				["--composer-bg" as string]:
-					"color-mix(in oklab, var(--color-muted) 30%, var(--color-background))",
-				["--composer-radius" as string]: "1.5rem",
-				["--composer-padding" as string]: "8px",
-			}}
-		>
-			<ThreadPrimitive.Viewport
-				turnAnchor="top"
-				data-slot="aui_thread-viewport"
-				className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
-			>
-				<div
-					className={cn(
-						"mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 py-4",
-						isEmpty && "justify-center",
-					)}
-				>
-					<AuiIf condition={isNewChatView}>
-						<Welcome />
-					</AuiIf>
-
-					<div
-						data-slot="aui_message-group"
-						className="flex flex-col gap-y-5 empty:hidden"
-					>
-						<ThreadPrimitive.Messages>
-							{() => <ThreadMessage />}
-						</ThreadPrimitive.Messages>
-					</div>
-				</div>
-			</ThreadPrimitive.Viewport>
-
-			{/* Composer floats at the bottom of the chat area — no surrounding bar. */}
-			<div data-slot="aui_thread-composer-dock" className="relative shrink-0">
-				<ThreadScrollToBottom />
-				<div className="mx-auto w-full max-w-(--thread-max-width) px-4 pt-2 pb-4">
-					<AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
-						<ThreadSuggestions />
-					</AuiIf>
-					<Composer />
-				</div>
-			</div>
-		</ThreadPrimitive.Root>
-	);
-};
-
-const ThreadMessage: FC = () => {
+export const ThreadMessage: FC = () => {
 	const { AssistantMessage: AssistantMessageComponent = AssistantMessage } =
 		useContext(ThreadComponentsContext);
 	const role = useAuiState((s) => s.message.role);
@@ -171,158 +49,6 @@ const ThreadMessage: FC = () => {
 	if (isEditing) return <EditComposer />;
 	if (role === "user") return <UserMessage />;
 	return <AssistantMessageComponent />;
-};
-
-const ThreadScrollToBottom: FC = () => {
-	return (
-		<ThreadPrimitive.ScrollToBottom asChild>
-			<TooltipIconButton
-				tooltip="Scroll to bottom"
-				variant="outline"
-				className="aui-thread-scroll-to-bottom dark:border-border dark:bg-background dark:hover:bg-accent absolute -top-12 left-1/2 z-10 -translate-x-1/2 rounded-full p-4 shadow-sm disabled:invisible"
-			>
-				<ArrowDownIcon />
-			</TooltipIconButton>
-		</ThreadPrimitive.ScrollToBottom>
-	);
-};
-
-const ThreadWelcome: FC = () => {
-	return (
-		<div className="aui-thread-welcome-root fade-in animate-in fill-mode-both mb-8 flex flex-col items-center px-4 text-center duration-300">
-			<div className="mb-5 flex size-12 items-center justify-center rounded-2xl bg-neutral-900 text-white">
-				<FileSearchIcon className="size-6" />
-			</div>
-			<h2 className="text-xl font-semibold tracking-tight text-neutral-900">
-				Start with your PDFs
-			</h2>
-			<p className="mt-2 max-w-md text-sm leading-relaxed text-neutral-500">
-				Upload to focus for this chat, or keep files in the library and choose
-				which ones are searchable.
-			</p>
-		</div>
-	);
-};
-
-const ThreadSuggestions: FC = () => {
-	return (
-		<div className="aui-thread-welcome-suggestions flex w-full flex-wrap items-center justify-center gap-2 px-4">
-			<ThreadPrimitive.Suggestions>
-				{() => <ThreadSuggestionItem />}
-			</ThreadPrimitive.Suggestions>
-		</div>
-	);
-};
-
-const ThreadSuggestionItem: FC = () => {
-	return (
-		<div className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 animate-in fill-mode-both duration-200">
-			<SuggestionPrimitive.Trigger send asChild>
-				<Button
-					variant="ghost"
-					className="aui-thread-welcome-suggestion text-foreground hover:bg-muted border-border/60 h-auto gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-normal whitespace-nowrap transition-colors"
-				>
-					<SuggestionPrimitive.Title className="aui-thread-welcome-suggestion-text-1" />
-					<SuggestionPrimitive.Description className="aui-thread-welcome-suggestion-text-2 empty:hidden" />
-				</Button>
-			</SuggestionPrimitive.Trigger>
-		</div>
-	);
-};
-
-const Composer: FC = () => {
-	return (
-		<ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col gap-2">
-			<ComposerAttachments />
-			<ComposerPrimitive.AttachmentDropzone asChild>
-				<div
-					data-slot="aui_composer-shell"
-					className="border-border data-[dragging=true]:border-ring focus-within:border-ring/60 flex w-full items-center gap-1 rounded-xl border bg-muted/40 px-1.5 py-1.5 shadow-sm transition-colors focus-within:bg-background data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/40"
-				>
-					<ComposerUpload />
-					<ComposerPrimitive.Input
-						placeholder="Ask about your selected documents..."
-						className="aui-composer-input placeholder:text-muted-foreground max-h-40 min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm leading-relaxed outline-none"
-						rows={1}
-						autoFocus
-						aria-label="Message input"
-					/>
-					<ComposerSend />
-				</div>
-			</ComposerPrimitive.AttachmentDropzone>
-		</ComposerPrimitive.Root>
-	);
-};
-
-const ComposerUpload: FC = () => {
-	const { uploading, upload } = useDocumentsContext();
-	const inputRef = useRef<HTMLInputElement>(null);
-
-	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		for (const file of getPdfFiles(e.target.files)) {
-			void upload(file);
-		}
-		if (inputRef.current) inputRef.current.value = "";
-	};
-
-	return (
-		<>
-			<input
-				ref={inputRef}
-				type="file"
-				accept="application/pdf,.pdf"
-				multiple
-				className="hidden"
-				onChange={handleChange}
-			/>
-			<TooltipIconButton
-				tooltip="Upload to focus documents"
-				side="top"
-				type="button"
-				variant="ghost"
-				size="icon"
-				className="aui-composer-upload text-muted-foreground hover:text-foreground size-8 shrink-0"
-				aria-label="Upload to focus documents"
-				disabled={uploading}
-				onClick={() => inputRef.current?.click()}
-			>
-				<PaperclipIcon className="size-4" />
-			</TooltipIconButton>
-		</>
-	);
-};
-
-const ComposerSend: FC = () => {
-	return (
-		<>
-			<AuiIf condition={(s) => !s.thread.isRunning}>
-				<ComposerPrimitive.Send asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon"
-						className="aui-composer-send text-foreground disabled:text-muted-foreground/40 size-8 shrink-0"
-						aria-label="Send message"
-					>
-						<SendHorizontalIcon className="size-4" />
-					</Button>
-				</ComposerPrimitive.Send>
-			</AuiIf>
-			<AuiIf condition={(s) => s.thread.isRunning}>
-				<ComposerPrimitive.Cancel asChild>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon"
-						className="aui-composer-cancel text-foreground size-8 shrink-0"
-						aria-label="Stop generating"
-					>
-						<SquareIcon className="aui-composer-cancel-icon size-3.5 fill-current" />
-					</Button>
-				</ComposerPrimitive.Cancel>
-			</AuiIf>
-		</>
-	);
 };
 
 const MessageError: FC = () => {
@@ -342,11 +68,8 @@ const AssistantMessage: FC = () => {
 		ReasoningGroup,
 	} = useContext(ThreadComponentsContext);
 
-	// reserves space for action bar and compensates with `-mb` for consistent msg spacing
-	// keeps hovered action bar from shifting layout (autohide doesn't support absolute positioning well)
-	// for pt-[n] use -mb-[n + 6] & min-h-[n + 6] to preserve compensation
-	const ACTION_BAR_PT = "pt-1.5";
-	const ACTION_BAR_HEIGHT = `-mb-7.5 min-h-7.5 ${ACTION_BAR_PT}`;
+	const actionBarPadding = "pt-1.5";
+	const actionBarHeight = `-mb-7.5 min-h-7.5 ${actionBarPadding}`;
 
 	return (
 		<MessagePrimitive.Root
@@ -356,7 +79,6 @@ const AssistantMessage: FC = () => {
 		>
 			<div
 				data-slot="aui_assistant-message-content"
-				// [contain-intrinsic-size:auto_24px] fixes issue #4104, don't change without checking for regressions
 				className="text-foreground wrap-break-word px-2 text-sm leading-6 [contain-intrinsic-size:auto_24px] [content-visibility:auto]"
 			>
 				<MessagePrimitive.GroupedParts
@@ -430,7 +152,7 @@ const AssistantMessage: FC = () => {
 
 			<div
 				data-slot="aui_assistant-message-footer"
-				className={cn("ms-2 flex items-center", ACTION_BAR_HEIGHT)}
+				className={cn("ms-2 flex items-center", actionBarHeight)}
 			>
 				<BranchPicker />
 				<AssistantActionBar />

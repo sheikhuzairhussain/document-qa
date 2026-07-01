@@ -9,7 +9,6 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import type { Document } from "../types";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -19,16 +18,21 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from "./ui/alert-dialog";
-import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+} from "@/components/ui/dropdown-menu";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { Document } from "@/types";
 
 interface DocumentRowProps {
 	document: Document;

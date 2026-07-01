@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AvailableDocuments, DocSelection } from "../types";
+import type { AvailableDocuments, DocSelection } from "@/types";
 
 const DEFAULT_SELECTION: DocSelection = { library: [] };
 

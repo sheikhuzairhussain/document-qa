@@ -21,18 +21,18 @@ import {
 } from "react";
 import remarkGfm from "remark-gfm";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { usePdfViewer } from "@/components/pdf-viewer";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { DocumentSourceChunk } from "@/lib/citations";
 import {
 	citationHrefToMarker,
+	type DocumentSourceChunk,
 	extractSourceChunksFromParts,
 	replaceCitationMarkersWithLinks,
-} from "@/lib/citations";
+} from "@/features/citations/citations";
+import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
 import { cn } from "@/lib/utils";
 
 type CitationSource = DocumentSourceChunk;

@@ -1,15 +1,11 @@
-import { Loader2, Upload } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
-import type { DocumentSelection } from "../hooks/use-document-selection";
-import { getPdfFiles } from "../lib/files";
-import type { Document } from "../types";
+import { type ChangeEvent, useCallback, useRef } from "react";
+import type { DocumentSelection } from "@/features/documents/hooks/use-document-selection";
+import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
+import { getPdfFiles } from "@/lib/files";
+import type { Document } from "@/types";
 import { DocumentSection } from "./document-section";
-import { usePdfViewer } from "./pdf-viewer";
-import { Button } from "./ui/button";
-
-const MIN_WIDTH = 280;
-const MAX_WIDTH = 700;
-const DEFAULT_WIDTH = 400;
+import { SectionUploadButton } from "./section-upload-button";
+import { useResizableDocumentPanel } from "./use-resizable-document-panel";
 
 interface DocumentPanelProps {
 	/** Documents explicitly marked as focus for the current chat. */
@@ -42,44 +38,13 @@ export function DocumentPanel({
 	onDeleteDocument,
 	onReprocessDocument,
 }: DocumentPanelProps) {
-	const [width, setWidth] = useState(DEFAULT_WIDTH);
-	const [dragging, setDragging] = useState(false);
-	const containerRef = useRef<HTMLDivElement>(null);
 	const focusUploadRef = useRef<HTMLInputElement>(null);
 	const libraryUploadRef = useRef<HTMLInputElement>(null);
 	const { openDocument } = usePdfViewer();
+	const { width, dragging, handleMouseDown } = useResizableDocumentPanel();
 
 	const { libraryAll, librarySelected, toggleLibraryAll, toggleLibraryDoc } =
 		selection;
-
-	const handleMouseDown = useCallback(
-		(e: React.MouseEvent) => {
-			e.preventDefault();
-			setDragging(true);
-
-			const startX = e.clientX;
-			const startWidth = width;
-
-			const handleMouseMove = (moveEvent: MouseEvent) => {
-				const delta = startX - moveEvent.clientX;
-				const newWidth = Math.min(
-					MAX_WIDTH,
-					Math.max(MIN_WIDTH, startWidth + delta),
-				);
-				setWidth(newWidth);
-			};
-
-			const handleMouseUp = () => {
-				setDragging(false);
-				window.removeEventListener("mousemove", handleMouseMove);
-				window.removeEventListener("mouseup", handleMouseUp);
-			};
-
-			window.addEventListener("mousemove", handleMouseMove);
-			window.addEventListener("mouseup", handleMouseUp);
-		},
-		[width],
-	);
 
 	const handleDelete = useCallback(
 		async (doc: Document) => {
@@ -137,7 +102,7 @@ export function DocumentPanel({
 	);
 
 	const handleFocusUploadChange = useCallback(
-		(e: React.ChangeEvent<HTMLInputElement>) => {
+		(e: ChangeEvent<HTMLInputElement>) => {
 			for (const file of getPdfFiles(e.target.files)) {
 				void onUpload(file);
 			}
@@ -147,7 +112,7 @@ export function DocumentPanel({
 	);
 
 	const handleLibraryUploadChange = useCallback(
-		(e: React.ChangeEvent<HTMLInputElement>) => {
+		(e: ChangeEvent<HTMLInputElement>) => {
 			for (const file of getPdfFiles(e.target.files)) {
 				void onUploadToLibrary(file);
 			}
@@ -158,7 +123,6 @@ export function DocumentPanel({
 
 	return (
 		<div
-			ref={containerRef}
 			style={{ width }}
 			className="relative flex h-full flex-shrink-0 flex-col border-l border-neutral-200 bg-white"
 		>
@@ -237,34 +201,5 @@ export function DocumentPanel({
 				/>
 			</div>
 		</div>
-	);
-}
-
-function SectionUploadButton({
-	uploading,
-	ariaLabel,
-	onClick,
-}: {
-	uploading: boolean;
-	ariaLabel: string;
-	onClick: () => void;
-}) {
-	return (
-		<Button
-			type="button"
-			variant="outline"
-			size="sm"
-			className="h-6 shrink-0 gap-1 rounded-md px-1.5 text-[11px]"
-			disabled={uploading}
-			aria-label={ariaLabel}
-			onClick={onClick}
-		>
-			{uploading ? (
-				<Loader2 className="size-3 animate-spin" />
-			) : (
-				<Upload className="size-3" />
-			)}
-			Upload
-		</Button>
 	);
 }

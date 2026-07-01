@@ -1,5 +1,5 @@
 import type { Thread } from "@langchain/langgraph-sdk";
-import { agentsClient } from "./agents";
+import { agentsClient } from "@/lib/agents";
 
 /**
  * Tracks which documents are marked as focus documents for each chat, so focus

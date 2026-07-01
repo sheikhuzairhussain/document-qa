@@ -22,7 +22,15 @@ import {
 import { Page, Document as PDFDocument, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import { getDocumentUrl } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
 	buildFindTargets,
 	buildHighlightTarget,
@@ -30,17 +38,9 @@ import {
 	measureHighlightOverlays,
 	renderTextItem,
 	type TextLayerHighlightTarget,
-} from "@/lib/pdf-highlighting";
-import type { PdfViewerRequest } from "./pdf-viewer";
-import { Button } from "./ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
+} from "@/features/pdf/pdf-highlighting";
+import { getDocumentUrl } from "@/lib/api";
+import type { PdfViewerRequest } from "./pdf-viewer-provider";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 	"pdfjs-dist/build/pdf.worker.min.mjs",

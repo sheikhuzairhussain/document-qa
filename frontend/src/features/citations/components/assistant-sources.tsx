@@ -3,8 +3,8 @@
 import { useAuiState } from "@assistant-ui/react";
 import { FileTextIcon } from "lucide-react";
 import { type FC, useMemo } from "react";
-import { usePdfViewer } from "@/components/pdf-viewer";
-import { extractDocumentSourcesFromParts } from "@/lib/citations";
+import { extractDocumentSourcesFromParts } from "@/features/citations/citations";
+import { usePdfViewer } from "@/features/pdf/pdf-viewer-provider";
 
 export const AssistantSources: FC = () => {
 	const messageParts = useAuiState((s) => s.message.parts);

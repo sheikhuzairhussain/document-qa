@@ -1,4 +1,4 @@
-import type { Document } from "../types";
+import type { Document } from "@/types";
 
 const BASE = "/api";
 

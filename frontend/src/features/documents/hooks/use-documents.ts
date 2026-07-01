@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import * as api from "../lib/api";
-import type { Document } from "../types";
+import * as api from "@/lib/api";
+import type { Document } from "@/types";
 
 export const documentsQueryKey = ["documents"] as const;
 
