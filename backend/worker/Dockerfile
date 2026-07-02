@@ -11,20 +11,18 @@ ENV PYTHONPATH=/app:$PYTHONPATH
 # Copy dependency files first (layer caching)
 COPY pyproject.toml uv.lock* ./
 
-# Install dependencies.
+# Install dependencies. The worker needs PyMuPDF, Redis/RQ, psycopg, and Gemini
+# embeddings, but no API server runtime beyond shared project dependencies.
 RUN uv sync --group dev
 
-# Copy API plus shared libraries (will be overridden by volume mount in dev)
+# Copy worker plus shared libraries (will be overridden by volume mount in dev)
 COPY backend/__init__.py ./backend/__init__.py
 COPY backend/config.py ./backend/config.py
-COPY backend/api ./backend/api
+COPY backend/worker ./backend/worker
 COPY backend/lib ./backend/lib
-COPY alembic ./alembic
-COPY alembic.ini ./alembic.ini
 
 # Create uploads directory
 RUN mkdir -p uploads
 
-EXPOSE 8000
+CMD ["uv", "run", "rq", "worker", "--worker-class", "rq.SimpleWorker", "ingestion", "--url", "redis://redis:6379/0"]
 
-CMD ["uv", "run", "uvicorn", "backend.api.app:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]

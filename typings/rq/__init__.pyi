@@ -1,3 +1,6 @@
+class Job:
+    id: str
+
 class Queue:
     def __init__(self, name: str, *, connection: object | None = ...) -> None: ...
     def enqueue(
@@ -6,4 +9,4 @@ class Queue:
         *args: object,
         job_timeout: int | None = ...,
         **kwargs: object,
-    ) -> object: ...
+    ) -> Job: ...

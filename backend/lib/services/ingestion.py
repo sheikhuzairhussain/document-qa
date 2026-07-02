@@ -11,10 +11,10 @@ Runs in the RQ ``ingestion`` worker. For each uploaded PDF it:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 import fitz
-import structlog
 
 from backend.lib.db.models import (
     DOCUMENT_STATUS_COMPLETED,
@@ -24,9 +24,10 @@ from backend.lib.db.models import (
     DocumentChunk,
 )
 from backend.lib.db.session import sync_session
+from backend.lib.logging import scoped_logger
 from backend.lib.services.embeddings import embed_pdf_pages
 
-logger = structlog.get_logger()
+logger = scoped_logger("services:ingestion")
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,8 @@ def _single_page_pdf_bytes(doc: fitz.Document, page_index: int) -> bytes:
 
 
 def extract_pdf_pages(file_path: str) -> list[PagePayload]:
+    started_at = time.perf_counter()
+    logger.info("PDF page extraction started", path=file_path)
     doc = fitz.open(file_path)
     try:
         pages: list[PagePayload] = []
@@ -83,6 +86,13 @@ def extract_pdf_pages(file_path: str) -> list[PagePayload]:
                     pdf_bytes=_single_page_pdf_bytes(doc, page_index),
                 )
             )
+        logger.info(
+            "PDF page extraction completed",
+            path=file_path,
+            page_count=len(pages),
+            text_chars=sum(len(page.text) for page in pages),
+            duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        )
         return pages
     finally:
         doc.close()
@@ -98,6 +108,8 @@ def document_text(pages: list[PagePayload]) -> str | None:
 def process_document(document_id: str) -> None:
     """Extract, embed, and index a single document. Enqueued from upload."""
     log = logger.bind(document_id=document_id)
+    started_at = time.perf_counter()
+    log.info("Ingestion job started")
     session = sync_session()
     try:
         document = session.get(Document, document_id)
@@ -108,17 +120,27 @@ def process_document(document_id: str) -> None:
         document.status = DOCUMENT_STATUS_PROCESSING
         document.error = None
         session.commit()
+        log.info("Document marked processing", filename=document.filename)
 
         file_path = document.file_path
-        log.info("Starting ingestion", file_path=file_path)
+        log.info("Document ingestion started", file_path=file_path)
 
         pages = extract_pdf_pages(file_path)
         if not pages:
             raise ValueError("PDF has no pages.")
 
+        log.info(
+            "Document pages extracted",
+            page_count=len(pages),
+            text_chars=sum(len(page.text) for page in pages),
+        )
+        log.info("Document page embedding started", page_count=len(pages))
         vectors = embed_pdf_pages([page.pdf_bytes for page in pages])
+        log.info("Document page embedding completed", vector_count=len(vectors))
 
-        session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+        deleted_chunks = (
+            session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+        )
 
         for index, (page, vector) in enumerate(zip(pages, vectors, strict=True)):
             session.add(
@@ -138,10 +160,19 @@ def process_document(document_id: str) -> None:
         document.chunk_count = len(pages)
         document.status = DOCUMENT_STATUS_COMPLETED
         session.commit()
-        log.info("Ingestion complete", page_count=len(pages))
+        log.info(
+            "Ingestion completed",
+            page_count=len(pages),
+            deleted_chunks=deleted_chunks,
+            inserted_chunks=len(pages),
+            duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        )
 
     except Exception as exc:
-        log.exception("Ingestion failed")
+        log.exception(
+            "Ingestion failed",
+            duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        )
         session.rollback()
         # Best-effort: record the failure on the document so the UI can show it.
         try:
@@ -150,6 +181,7 @@ def process_document(document_id: str) -> None:
                 document.status = DOCUMENT_STATUS_FAILED
                 document.error = str(exc)[:1000]
                 session.commit()
+                log.info("Document marked failed after ingestion error")
         except Exception:
             log.exception("Failed to record ingestion failure")
         raise

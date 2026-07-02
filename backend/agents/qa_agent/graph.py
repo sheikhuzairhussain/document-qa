@@ -5,6 +5,9 @@ from backend.agents.qa_agent.context import AgentContext
 from backend.agents.qa_agent.middleware import FocusDocumentsMiddleware
 from backend.agents.qa_agent.sandbox import get_sandbox_backend, get_thread_id
 from backend.agents.qa_agent.tools import get_download_url, read_document, search_documents
+from backend.lib.logging import scoped_logger
+
+logger = scoped_logger("agents:qa_agent")
 
 INSTRUCTIONS = """\
 You are a document Q&A assistant for commercial real estate lawyers reviewing \
@@ -78,6 +81,7 @@ def agent(config: RunnableConfig | None = None) -> object:
     """Build the QA agent graph for the current run configuration."""
     thread_id = get_thread_id(config)
     if thread_id is None:
+        logger.info("QA agent graph created", sandbox_enabled=False)
         return create_deep_agent(
             model="anthropic:claude-sonnet-4-6",
             tools=[search_documents, read_document, get_download_url],
@@ -86,6 +90,7 @@ def agent(config: RunnableConfig | None = None) -> object:
             context_schema=AgentContext,
         )
 
+    logger.info("QA agent graph created", sandbox_enabled=True, thread_id=thread_id)
     return create_deep_agent(
         model="anthropic:claude-sonnet-4-6",
         tools=[search_documents, read_document, get_download_url],

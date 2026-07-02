@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-import structlog
 from langchain.agents.middleware import AgentMiddleware, AgentState, ModelRequest, ModelResponse
 from langchain_core.messages import SystemMessage
 
 from backend.agents.qa_agent.context import AgentContext, get_focus_document_ids
+from backend.lib.logging import scoped_logger
 from backend.lib.services.retrieval import DocumentInfo, get_documents
 
-logger = structlog.get_logger()
+logger = scoped_logger("agents:qa_agent")
 
 
 class FocusDocumentsMiddleware(AgentMiddleware[AgentState[object], AgentContext, object]):
@@ -36,6 +36,7 @@ class FocusDocumentsMiddleware(AgentMiddleware[AgentState[object], AgentContext,
     ) -> ModelRequest[AgentContext]:
         focus_document_ids = get_focus_document_ids(request.runtime.context)
         if focus_document_ids is None:
+            logger.debug("Focus document context skipped; no runtime context key")
             return request
 
         docs = self._lookup_documents(focus_document_ids)
@@ -44,20 +45,31 @@ class FocusDocumentsMiddleware(AgentMiddleware[AgentState[object], AgentContext,
         system_content = (
             f"{current_system}\n\n{hidden_context}" if current_system else hidden_context
         )
+        logger.info(
+            "Focus document context injected",
+            focus_document_count=len(focus_document_ids),
+            metadata_count=len(docs),
+        )
         return request.override(system_message=SystemMessage(content=system_content))
 
     def _lookup_documents(self, document_ids: list[str]) -> list[DocumentInfo]:
         if not document_ids:
+            logger.debug("Focus document metadata lookup skipped; no focus documents")
             return []
         try:
-            return get_documents(document_ids)
+            documents = get_documents(document_ids)
         except Exception:
-            logger.warning(
-                "focus_documents_lookup_failed",
+            logger.exception(
+                "Focus document metadata lookup failed",
                 document_ids=document_ids,
-                exc_info=True,
             )
             return []
+        logger.info(
+            "Focus document metadata lookup completed",
+            requested_count=len(document_ids),
+            found_count=len(documents),
+        )
+        return documents
 
 
 def format_hidden_focus_context(

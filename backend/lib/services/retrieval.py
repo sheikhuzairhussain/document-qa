@@ -14,6 +14,7 @@ hybrid-search query.
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Final
 
@@ -23,6 +24,9 @@ from psycopg import Connection
 from psycopg.rows import DictRow, dict_row
 
 from backend.config import settings
+from backend.lib.logging import scoped_logger
+
+logger = scoped_logger("services:retrieval")
 
 # RRF constant. 60 is the canonical default from the original RRF paper and the
 # value Timescale uses in its hybrid-search example.
@@ -130,17 +134,25 @@ def _embed_query(text: str) -> str:
     LangGraph may execute several tool calls in parallel. Keep the Gemini client
     local to this call so parallel queries don't share a closable httpx client.
     """
-    settings = _embedding_settings()
+    embedding_settings = _embedding_settings()
     prepared_query = f"task: question answering | query: {text}"
+    started_at = time.perf_counter()
     with genai.Client() as client:
         response = client.models.embed_content(
-            model=settings.model,
+            model=embedding_settings.model,
             contents=prepared_query,
             config=types.EmbedContentConfig(
-                output_dimensionality=settings.dimensions,
+                output_dimensionality=embedding_settings.dimensions,
             ),
         )
-    embedding = embedding_values(response, settings)
+    embedding = embedding_values(response, embedding_settings)
+    logger.debug(
+        "Retrieval query embedding completed",
+        query_chars=len(text),
+        model=embedding_settings.model,
+        dimensions=embedding_settings.dimensions,
+        duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+    )
     return _vector_literal(embedding)
 
 
@@ -175,6 +187,7 @@ def _vector_literal(vector: list[float]) -> str:
 def database_url() -> str:
     url = settings.rag_database_url
     if not url:
+        logger.error("RAG database URL missing")
         raise RuntimeError(
             "RAG_DATABASE_URL is not set; the qa-agent needs it to reach the "
             "document chunks in the main application database."
@@ -195,41 +208,71 @@ def hybrid_search(
     ``None`` searches every ingested document. ``candidates`` is how many results
     each ranking (BM25, vector) contributes before fusion.
     """
-    qvec = _embed_query(query)
-    params = {
-        "query": query,
-        "qvec": qvec,
-        "doc_ids": document_ids,  # None -> search all documents
-        "candidates": candidates,
-        "k": RRF_K,
-        "limit": limit,
-    }
+    started_at = time.perf_counter()
+    search_all_documents = document_ids is None
+    logger.info(
+        "Hybrid search started",
+        query_chars=len(query),
+        search_all_documents=search_all_documents,
+        document_filter_count=None if document_ids is None else len(document_ids),
+        limit=limit,
+        candidates=candidates,
+    )
+    try:
+        qvec = _embed_query(query)
+        params = {
+            "query": query,
+            "qvec": qvec,
+            "doc_ids": document_ids,  # None -> search all documents
+            "candidates": candidates,
+            "k": RRF_K,
+            "limit": limit,
+        }
 
-    with Connection[DictRow].connect(database_url(), row_factory=dict_row) as conn:
-        with conn.cursor() as cur:
-            cur.execute(_HYBRID_SQL, params)
-            rows = cur.fetchall()
+        with Connection[DictRow].connect(database_url(), row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(_HYBRID_SQL, params)
+                rows = cur.fetchall()
 
-    return [
-        RetrievedChunk(
-            chunk_id=row["id"],
-            document_id=row["document_id"],
-            filename=row["filename"],
-            chunk_index=row["chunk_index"],
-            content=row["content"],
-            page_no=row["page_no"],
-            headings=row["headings"],
-            score=float(row["rrf_score"]),
+        chunks = [
+            RetrievedChunk(
+                chunk_id=row["id"],
+                document_id=row["document_id"],
+                filename=row["filename"],
+                chunk_index=row["chunk_index"],
+                content=row["content"],
+                page_no=row["page_no"],
+                headings=row["headings"],
+                score=float(row["rrf_score"]),
+            )
+            for row in rows
+        ]
+    except Exception:
+        logger.exception(
+            "Hybrid search failed",
+            query_chars=len(query),
+            search_all_documents=search_all_documents,
+            document_filter_count=None if document_ids is None else len(document_ids),
+            duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
         )
-        for row in rows
-    ]
+        raise
+
+    logger.info(
+        "Hybrid search completed",
+        query_chars=len(query),
+        result_count=len(chunks),
+        duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+    )
+    return chunks
 
 
 def get_documents(document_ids: list[str]) -> list[DocumentInfo]:
     """Fetch citation and status metadata for the given documents."""
     if not document_ids:
+        logger.debug("Document metadata lookup skipped; no document ids provided")
         return []
 
+    started_at = time.perf_counter()
     with Connection[DictRow].connect(database_url(), row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -243,7 +286,7 @@ def get_documents(document_ids: list[str]) -> list[DocumentInfo]:
             )
             rows = cur.fetchall()
 
-    return [
+    documents = [
         DocumentInfo(
             document_id=row["id"],
             filename=row["filename"],
@@ -253,10 +296,19 @@ def get_documents(document_ids: list[str]) -> list[DocumentInfo]:
         )
         for row in rows
     ]
+    logger.info(
+        "Document metadata lookup completed",
+        requested_count=len(document_ids),
+        found_count=len(documents),
+        duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+    )
+    return documents
 
 
 def get_document_chunks(document_id: str) -> list[DocumentChunkText]:
     """Fetch all indexed chunks for a document in citation-friendly order."""
+    started_at = time.perf_counter()
+    logger.info("Document chunk lookup started", document_id=document_id)
     with Connection[DictRow].connect(database_url(), row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -278,7 +330,7 @@ def get_document_chunks(document_id: str) -> list[DocumentChunkText]:
             )
             rows = cur.fetchall()
 
-    return [
+    chunks = [
         DocumentChunkText(
             chunk_id=row["id"],
             document_id=row["document_id"],
@@ -290,3 +342,10 @@ def get_document_chunks(document_id: str) -> list[DocumentChunkText]:
         )
         for row in rows
     ]
+    logger.info(
+        "Document chunk lookup completed",
+        document_id=document_id,
+        chunk_count=len(chunks),
+        duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
+    )
+    return chunks

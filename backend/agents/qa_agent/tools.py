@@ -5,7 +5,6 @@ from __future__ import annotations
 import posixpath
 from typing import Literal, TypedDict
 
-import structlog
 from e2b import FileNotFoundException, FileType, InvalidArgumentException, SandboxException
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolRuntime
@@ -20,6 +19,7 @@ from backend.agents.qa_agent.sandbox import (
     get_sandbox,
     get_thread_id,
 )
+from backend.lib.logging import scoped_logger
 from backend.lib.services.retrieval import (
     DocumentChunkText,
     RetrievedChunk,
@@ -27,7 +27,7 @@ from backend.lib.services.retrieval import (
     hybrid_search,
 )
 
-logger = structlog.get_logger()
+logger = scoped_logger("agents:qa_agent")
 
 CITATION_MARKER_END = "]]"
 SANDBOX_HOME = "/home/user"
@@ -189,9 +189,9 @@ def search_documents(
     effective_document_ids = _effective_document_ids(document_ids, runtime)
     if effective_document_ids == []:
         logger.info(
-            "search_documents_skipped_empty_scope",
-            query=query,
-            requested_document_ids=document_ids,
+            "Document search skipped; retrieval scope is empty",
+            query_chars=len(query),
+            requested_document_count=None if document_ids is None else len(document_ids),
         )
         if document_ids:
             return (
@@ -207,13 +207,24 @@ def search_documents(
             _empty_artifact(),
         )
 
+    logger.info(
+        "Document search started",
+        query_chars=len(query),
+        requested_document_count=None if document_ids is None else len(document_ids),
+        effective_document_count=None
+        if effective_document_ids is None
+        else len(effective_document_ids),
+        search_all_documents=effective_document_ids is None,
+    )
     chunks = hybrid_search(query, document_ids=effective_document_ids)
     logger.info(
-        "search_documents",
-        query=query,
-        requested_document_ids=document_ids,
-        effective_document_ids=effective_document_ids,
-        results=len(chunks),
+        "Document search completed",
+        query_chars=len(query),
+        requested_document_count=None if document_ids is None else len(document_ids),
+        effective_document_count=None
+        if effective_document_ids is None
+        else len(effective_document_ids),
+        result_count=len(chunks),
     )
     return format_retrieved_chunks(chunks), document_sources_artifact(chunks)
 
@@ -235,18 +246,19 @@ def read_document(
             or available_documents must be "all".
     """
     if not _is_document_available(document_id, runtime):
-        logger.info("read_document_denied_unavailable", document_id=document_id)
+        logger.info("Document read denied; document unavailable", document_id=document_id)
         return (
             "That document is not available for retrieval in this chat. Use one "
             "of the focus document ids or checked library document ids.",
             _empty_artifact(),
         )
 
+    logger.info("Document read started", document_id=document_id)
     chunks = get_document_chunks(document_id)
     logger.info(
-        "read_document",
+        "Document read completed",
         document_id=document_id,
-        chunks=len(chunks),
+        chunk_count=len(chunks),
     )
     return format_document_chunks(chunks), document_sources_artifact(chunks)
 
@@ -268,6 +280,7 @@ def get_download_url(
         normalized_path = normalize_sandbox_file_path(file_path)
     except ValueError as exc:
         message = str(exc)
+        logger.warning("Sandbox download URL rejected; invalid path", reason=message)
         return message, download_url_artifact(file_path=file_path, error=message)
 
     thread_id = get_thread_id(runtime.config)
@@ -276,13 +289,24 @@ def get_download_url(
             "No sandbox is available for this run, so a download URL cannot be "
             "created. Run this tool only after sandbox-backed file work."
         )
+        logger.warning("Sandbox download URL skipped; no sandbox thread")
         return message, download_url_artifact(file_path=normalized_path, error=message)
 
     try:
+        logger.info(
+            "Sandbox download URL creation started",
+            thread_id=thread_id,
+            file_path=normalized_path,
+        )
         sandbox = get_sandbox(thread_id)
         info = sandbox.files.get_info(normalized_path)
         if info.type == FileType.DIR:
             message = f"{normalized_path} is a directory. Provide a file path instead."
+            logger.warning(
+                "Sandbox download URL rejected; path is a directory",
+                thread_id=thread_id,
+                file_path=normalized_path,
+            )
             return (
                 message,
                 download_url_artifact(file_path=normalized_path, error=message),
@@ -294,18 +318,24 @@ def get_download_url(
         )
     except FileNotFoundException:
         message = f"{normalized_path} does not exist in the sandbox."
+        logger.warning(
+            "Sandbox download URL rejected; file not found",
+            thread_id=thread_id,
+            file_path=normalized_path,
+        )
         return message, download_url_artifact(file_path=normalized_path, error=message)
     except (InvalidArgumentException, SandboxException, RuntimeError) as exc:
         message = f"Could not create a download URL for {normalized_path}: {exc}"
         logger.warning(
-            "sandbox_download_url_failed",
+            "Sandbox download URL creation failed",
+            thread_id=thread_id,
             file_path=normalized_path,
             error=str(exc),
         )
         return message, download_url_artifact(file_path=normalized_path, error=message)
 
     logger.info(
-        "sandbox_download_url_created",
+        "Sandbox download URL created",
         thread_id=thread_id,
         file_path=normalized_path,
         expires_in_seconds=DOWNLOAD_URL_EXPIRATION_SECONDS,

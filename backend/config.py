@@ -4,6 +4,8 @@ import os
 
 from pydantic_settings import BaseSettings
 
+from backend.lib.logging import scoped_logger
+
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://orbital:orbital@db:5432/orbital_takehome"
@@ -30,6 +32,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+logger = scoped_logger("config")
 
 # Ensure the API keys are available as environment variables so that the
 # pydantic-ai Anthropic integration and the google-genai SDK can pick them up.
@@ -39,3 +42,12 @@ if settings.anthropic_api_key:
     os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
 if settings.google_api_key:
     os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
+
+logger.debug(
+    "Settings loaded",
+    upload_dir=settings.upload_dir,
+    max_upload_size=settings.max_upload_size,
+    embedding_model=settings.embedding_model,
+    embedding_dim=settings.embedding_dim,
+    embedding_concurrency=settings.embedding_concurrency,
+)

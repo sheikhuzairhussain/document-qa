@@ -36,7 +36,7 @@ dependencies = [
     # Settings
     "pydantic-settings>=2.0.0",
     # Logging
-    "structlog>=25.1.0",
+    "loguru>=0.7.3",
     # File upload
     "python-multipart>=0.0.9",
     # Environment
@@ -79,6 +79,7 @@ asyncio_mode = "auto"
 testpaths = [
     "backend/api/tests",
     "backend/agents/qa_agent/tests",
+    "backend/worker/tests",
     "backend/lib/services/tests",
     "backend/tests",
 ]

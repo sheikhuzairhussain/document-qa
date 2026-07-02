@@ -3,11 +3,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-APP_LAYER_ROOTS = (Path("backend/api"), Path("backend/agents"))
+APP_LAYER_ROOTS = (Path("backend/api"), Path("backend/agents"), Path("backend/worker"))
 FORBIDDEN_APP_LAYER_IMPORTS = ("backend.lib.db", "sqlalchemy", "psycopg")
 
 
-def test_api_and_agents_do_not_import_database_layer_directly() -> None:
+def test_entrypoints_do_not_import_database_layer_directly() -> None:
     offenders: list[str] = []
 
     for root in APP_LAYER_ROOTS:

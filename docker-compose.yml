@@ -53,12 +53,12 @@ services:
         condition: service_healthy
     command: uv run uvicorn backend.api.app:app --reload --host 0.0.0.0 --port 8000
 
-  # Ingestion worker: same image as the API, consumes the RQ "ingestion" queue
-  # (PyMuPDF page extraction -> Gemini page-PDF embeddings -> document_chunks).
+  # Ingestion worker: consumes the RQ "ingestion" queue through a worker adapter.
+  # Actual ingestion behavior lives in backend/lib/services.
   worker:
     build:
       context: .
-      dockerfile: backend/api/Dockerfile
+      dockerfile: backend/worker/Dockerfile
     volumes:
       - ./backend:/app/backend
       - ./alembic:/app/alembic

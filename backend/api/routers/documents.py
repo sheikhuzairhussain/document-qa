@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import structlog
 from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 from starlette.responses import FileResponse
 
+from backend.lib.logging import scoped_logger
 from backend.lib.services.document import (
     DocumentFileMissingError,
     delete_document,
@@ -16,7 +16,7 @@ from backend.lib.services.document import (
     upload_document,
 )
 
-logger = structlog.get_logger()
+logger = scoped_logger("routers:documents")
 
 router = APIRouter(tags=["documents"])
 
@@ -49,6 +49,7 @@ class DocumentOut(BaseModel):
 async def list_documents_endpoint() -> list[DocumentOut]:
     """List every uploaded document (a flat library)."""
     documents = await list_documents()
+    logger.info("Documents listed", count=len(documents))
     return [DocumentOut.model_validate(doc) for doc in documents]
 
 
@@ -64,6 +65,12 @@ async def upload_document_endpoint(
     try:
         document = await upload_document(file)
     except ValueError as e:
+        logger.warning(
+            "Document upload rejected",
+            filename=file.filename,
+            content_type=file.content_type,
+            reason=str(e),
+        )
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     logger.info(
@@ -82,6 +89,7 @@ async def reprocess_document_endpoint(
     """Re-run ingestion for a document (e.g. to retry after a failure)."""
     document = await reprocess_document(document_id)
     if document is None:
+        logger.warning("Document reprocess requested for missing document", document_id=document_id)
         raise HTTPException(status_code=404, detail="Document not found")
 
     logger.info("Document re-queued for ingestion", document_id=document_id)
@@ -95,6 +103,7 @@ async def delete_document_endpoint(
     """Delete a document and its underlying file."""
     deleted = await delete_document(document_id)
     if not deleted:
+        logger.warning("Document delete requested for missing document", document_id=document_id)
         raise HTTPException(status_code=404, detail="Document not found")
 
     logger.info("Document deleted", document_id=document_id)
@@ -106,11 +115,19 @@ async def serve_document_file(document_id: str) -> FileResponse:
     try:
         document_file = await get_document_file(document_id)
     except DocumentFileMissingError as exc:
+        logger.warning("Document file missing on disk", document_id=document_id)
         raise HTTPException(status_code=404, detail="File not found on disk") from exc
 
     if document_file is None:
+        logger.warning("Document content requested for missing document", document_id=document_id)
         raise HTTPException(status_code=404, detail="Document not found")
 
+    logger.info(
+        "Document file served",
+        document_id=document_id,
+        filename=document_file.filename,
+        media_type=document_file.media_type,
+    )
     return FileResponse(
         path=document_file.path,
         filename=document_file.filename,

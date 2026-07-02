@@ -1,5 +1,9 @@
 from langchain.agents import create_agent
 
+from backend.lib.logging import scoped_logger
+
+logger = scoped_logger("agents:title_agent")
+
 INSTRUCTIONS = """\
 You generate concise chat titles.
 
@@ -19,3 +23,4 @@ agent = create_agent(
     tools=[],
     system_prompt=INSTRUCTIONS,
 )
+logger.info("Title agent graph created", tools_count=0)

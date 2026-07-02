@@ -9,7 +9,6 @@ from pathlib import PurePath
 from types import TracebackType
 from typing import Any, Protocol
 
-import structlog
 from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.engine import Result, ScalarResult
@@ -23,9 +22,10 @@ from backend.lib.db.models import (
     Document,
 )
 from backend.lib.db.session import async_session
+from backend.lib.logging import scoped_logger
 from backend.lib.services.queue import enqueue_ingestion
 
-logger = structlog.get_logger()
+logger = scoped_logger("services:documents")
 
 DEFAULT_DOCUMENT_FILENAME = "document.pdf"
 MAX_STORED_FILENAME_LENGTH = 180
@@ -145,8 +145,20 @@ class DocumentService:
 
     async def upload_document(self, file: UploadFile) -> Document:
         """Upload a PDF document and enqueue background ingestion."""
+        logger.info(
+            "Document upload started",
+            filename=file.filename,
+            content_type=file.content_type,
+        )
         async with self._session_factory() as session:
-            return await _upload_document(session, file, enqueue=self._enqueue)
+            document = await _upload_document(session, file, enqueue=self._enqueue)
+        logger.info(
+            "Document upload completed",
+            document_id=document.id,
+            filename=document.filename,
+            status=document.status,
+        )
+        return document
 
     async def get_document(self, document_id: str) -> Document | None:
         """Get a document by its ID."""
@@ -158,15 +170,19 @@ class DocumentService:
         async with self._session_factory() as session:
             stmt = select(Document).order_by(Document.uploaded_at.desc())
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            documents = list(result.scalars().all())
+        logger.info("Documents loaded", count=len(documents))
+        return documents
 
     async def reprocess_document(self, document_id: str) -> Document | None:
         """Re-enqueue a document for ingestion after resetting its status."""
         async with self._session_factory() as session:
             document = await _get_document(session, document_id)
             if document is None:
+                logger.warning("Document reprocess skipped; document not found", document_id=document_id)
                 return None
 
+            logger.info("Document reprocess requested", document_id=document_id)
             document.status = DOCUMENT_STATUS_PENDING
             document.error = None
             await session.commit()
@@ -183,6 +199,8 @@ class DocumentService:
                 document.error = "Could not enqueue document for processing."
                 await session.commit()
                 await session.refresh(document)
+            else:
+                logger.info("Document reprocess enqueued", document_id=document.id)
 
             return document
 
@@ -191,17 +209,29 @@ class DocumentService:
         async with self._session_factory() as session:
             document = await _get_document(session, document_id)
             if document is None:
+                logger.warning("Document delete skipped; document not found", document_id=document_id)
                 return False
 
             file_path = document.file_path
+            filename = document.filename
             await session.delete(document)
             await session.commit()
+            logger.info(
+                "Document record deleted",
+                document_id=document_id,
+                filename=filename,
+            )
 
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
+                logger.info("Document file removed", document_id=document_id, path=file_path)
             except OSError:
-                logger.warning("Failed to remove document file from disk", path=file_path)
+                logger.exception(
+                    "Failed to remove document file from disk",
+                    document_id=document_id,
+                    path=file_path,
+                )
 
         return True
 
@@ -209,11 +239,22 @@ class DocumentService:
         """Resolve a stored PDF file for serving to the frontend."""
         document = await self.get_document(document_id)
         if document is None:
+            logger.warning("Document file lookup skipped; document not found", document_id=document_id)
             return None
 
         if not os.path.exists(document.file_path):
+            logger.warning(
+                "Document file lookup failed; file missing on disk",
+                document_id=document_id,
+                path=document.file_path,
+            )
             raise DocumentFileMissingError(document.file_path)
 
+        logger.info(
+            "Document file resolved",
+            document_id=document_id,
+            filename=document.filename,
+        )
         return DocumentFile(path=document.file_path, filename=document.filename)
 
 
@@ -260,10 +301,21 @@ async def _upload_document(
     if file.content_type not in ("application/pdf", "application/x-pdf"):
         filename = file.filename or ""
         if not filename.lower().endswith(".pdf"):
+            logger.warning(
+                "Document upload rejected; unsupported file type",
+                filename=file.filename,
+                content_type=file.content_type,
+            )
             raise ValueError("Only PDF files are supported.")
 
     content = await file.read()
     if len(content) > settings.max_upload_size:
+        logger.warning(
+            "Document upload rejected; file too large",
+            filename=file.filename,
+            size_bytes=len(content),
+            max_size_bytes=settings.max_upload_size,
+        )
         raise ValueError(
             f"File too large. Maximum size is {settings.max_upload_size // (1024 * 1024)}MB."
         )
@@ -276,7 +328,12 @@ async def _upload_document(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    logger.info("Saved uploaded PDF", filename=original_filename, path=file_path, size=len(content))
+    logger.info(
+        "Document file saved",
+        filename=original_filename,
+        path=file_path,
+        size_bytes=len(content),
+    )
 
     document = Document(
         filename=original_filename,
@@ -288,6 +345,12 @@ async def _upload_document(
     session.add(document)
     await session.commit()
     await session.refresh(document)
+    logger.info(
+        "Document record created",
+        document_id=document.id,
+        filename=document.filename,
+        status=document.status,
+    )
 
     try:
         enqueue(document.id)
@@ -297,6 +360,8 @@ async def _upload_document(
         document.error = "Could not enqueue document for processing."
         await session.commit()
         await session.refresh(document)
+    else:
+        logger.info("Document ingestion enqueued", document_id=document.id)
 
     return document
 

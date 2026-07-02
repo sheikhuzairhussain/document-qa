@@ -7,9 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.config import settings
+from backend.lib.logging import scoped_logger
+
+logger = scoped_logger("db")
 
 engine = create_async_engine(settings.database_url, echo=False)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+logger.debug("Async database session factory configured", driver="asyncpg")
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -24,3 +28,4 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 _sync_database_url = settings.database_url.replace("+asyncpg", "+psycopg")
 sync_engine = create_engine(_sync_database_url, echo=False)
 sync_session: sessionmaker[Session] = sessionmaker(sync_engine, expire_on_commit=False)
+logger.debug("Sync database session factory configured", driver="psycopg")

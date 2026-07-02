@@ -93,6 +93,7 @@ The backend is organized as a small monorepo:
 backend/
   api/                 FastAPI app and API Dockerfile
   agents/              Aegra-served LangGraph agents, skills, E2B template scripts
+  worker/              RQ worker adapter and worker Dockerfile
   lib/
     db/                SQLAlchemy models and session factories
     services/          Shared application services
@@ -142,7 +143,7 @@ flowchart LR
   retrieval --> sessions
 ```
 
-`backend/api` and `backend/agents` do not import the database layer directly.
+`backend/api`, `backend/agents`, and `backend/worker` do not import the database layer directly.
 The architecture test in `backend/tests/test_architecture.py` guards that rule.
 This keeps request handling and agent orchestration thin, and leaves database
 details behind service APIs.
@@ -383,6 +384,7 @@ Tests are colocated with the modules they cover:
 ```text
 backend/api/tests/                 API route tests
 backend/agents/qa_agent/tests/     Agent context/tool formatting tests
+backend/worker/tests/              Worker adapter tests
 backend/lib/services/tests/        Service, ingestion, embedding, retrieval tests
 backend/tests/                     Cross-module architecture tests
 ```
@@ -401,13 +403,15 @@ The suite emphasizes:
 flowchart LR
   apiTests["backend/api/tests<br/>route behavior"]
   agentTests["backend/agents/qa_agent/tests<br/>context + tool contracts"]
+  workerTests["backend/worker/tests<br/>worker adapter"]
   serviceTests["backend/lib/services/tests<br/>service, ingestion, retrieval"]
   archTests["backend/tests<br/>architecture boundaries"]
 
   apiTests --> services["services"]
   agentTests --> agentContracts["agent contracts"]
+  workerTests --> workerContract["worker delegates to services"]
   serviceTests --> serviceBehavior["service behavior"]
-  archTests --> boundary["api/agents must not import db directly"]
+  archTests --> boundary["api/agents/worker must not import db directly"]
 ```
 
 ## Technology
