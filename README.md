@@ -107,6 +107,41 @@ agents   -> services -> db
 worker   -> services -> db
 ```
 
+```mermaid
+flowchart LR
+  subgraph entrypoints["Entrypoints"]
+    api["backend/api<br/>FastAPI routers"]
+    agents["backend/agents<br/>LangGraph agents"]
+    worker["worker<br/>RQ process"]
+  end
+
+  subgraph services["Service layer"]
+    document["document.py"]
+    queue["queue.py"]
+    ingestion["ingestion.py"]
+    embeddings["embeddings.py"]
+    retrieval["retrieval.py"]
+  end
+
+  subgraph db["Data access"]
+    models["backend/lib/db/models.py"]
+    sessions["backend/lib/db/session.py"]
+  end
+
+  api --> document
+  worker --> ingestion
+  agents --> retrieval
+  agents --> document
+
+  document --> queue
+  document --> models
+  document --> sessions
+  ingestion --> embeddings
+  ingestion --> models
+  ingestion --> sessions
+  retrieval --> sessions
+```
+
 `backend/api` and `backend/agents` do not import the database layer directly.
 The architecture test in `backend/tests/test_architecture.py` guards that rule.
 This keeps request handling and agent orchestration thin, and leaves database
@@ -127,6 +162,33 @@ The service layer is where application behavior lives:
 - `retrieval.py` performs hybrid retrieval and document/chunk metadata reads for
   agents.
 
+```mermaid
+flowchart TB
+  document["document service"]
+  queue["queue service"]
+  ingestion["ingestion service"]
+  embeddings["embedding service"]
+  retrieval["retrieval service"]
+
+  uploads["uploads/"]
+  redis["Redis / RQ"]
+  db["documents + document_chunks"]
+  google["Gemini Embedding 2"]
+  agentTools["agent tools"]
+  apiRoutes["API routes"]
+
+  apiRoutes --> document
+  document --> uploads
+  document --> db
+  document --> queue --> redis
+  redis --> ingestion
+  ingestion --> uploads
+  ingestion --> embeddings --> google
+  ingestion --> db
+  agentTools --> retrieval --> db
+  retrieval --> google
+```
+
 ### Document Ingestion
 
 Upload is intentionally cheap:
@@ -143,6 +205,32 @@ Upload is intentionally cheap:
 The durable citation unit is a page-level chunk. Inline citation markers include
 the chunk id plus an exact text span for PDF highlighting.
 
+```mermaid
+sequenceDiagram
+  participant User
+  participant Frontend
+  participant API
+  participant DocumentService
+  participant Redis as Redis/RQ
+  participant Worker
+  participant DB as App DB
+  participant Gemini as Gemini Embeddings
+
+  User->>Frontend: Upload PDF
+  Frontend->>API: POST /api/documents
+  API->>DocumentService: upload_document(file)
+  DocumentService->>DB: Insert document(status=pending)
+  DocumentService->>Redis: Enqueue process_document(document_id)
+  DocumentService-->>API: Document metadata
+  API-->>Frontend: Pending document
+  Worker->>Redis: Consume ingestion job
+  Worker->>DB: Mark processing
+  Worker->>Worker: Split PDF into pages with PyMuPDF
+  Worker->>Gemini: Embed page PDFs concurrently
+  Worker->>DB: Insert page-level chunks
+  Worker->>DB: Mark completed or failed
+```
+
 ### Retrieval
 
 Retrieval uses a hybrid search strategy over `document_chunks`:
@@ -155,6 +243,25 @@ Retrieval uses a hybrid search strategy over `document_chunks`:
 The Postgres service uses `timescale/timescaledb-ha:pg17`, which bundles
 pgvector, pgvectorscale, and pg_textsearch. Retrieval is exposed to the agent
 through service-backed tools, so the agent never touches SQL directly.
+
+```mermaid
+flowchart LR
+  query["User question"]
+  tool["search_documents"]
+  embed["Query embedding<br/>Gemini Embedding 2"]
+  vector["Dense ranking<br/>pgvectorscale / pgvector"]
+  bm25["Sparse ranking<br/>pg_textsearch BM25"]
+  fusion["Reciprocal rank fusion"]
+  chunks["Retrieved chunks<br/>chunk_id + document + page + text"]
+  answer["Cited answer"]
+
+  query --> tool
+  tool --> embed --> vector
+  tool --> bm25
+  vector --> fusion
+  bm25 --> fusion
+  fusion --> chunks --> answer
+```
 
 ### Agents
 
@@ -175,6 +282,40 @@ When a run has a thread id, the QA agent can attach an E2B sandbox backend. The
 sandbox uses the `qa-agent-sandbox` template and exposes script-backed skills for
 PDF, Word, PowerPoint, and spreadsheet work. Generated files are returned through
 download URL tool artifacts, not raw URLs in assistant text.
+
+```mermaid
+flowchart TB
+  frontend["Frontend<br/>assistant-ui + LangGraph SDK"]
+  aegra["Aegra server<br/>/agents"]
+
+  subgraph qa["qa-agent"]
+    middleware["FocusDocumentsMiddleware<br/>hidden document context"]
+    deepAgent["Deep Agents graph<br/>Claude Sonnet"]
+    search["search_documents"]
+    read["read_document"]
+    download["get_download_url"]
+  end
+
+  subgraph title["title-agent"]
+    titleGraph["LangChain create_agent<br/>no tools, given context only"]
+  end
+
+  retrieval["retrieval service"]
+  appDb["App DB<br/>document chunks"]
+  agentDb["Agents DB<br/>threads/runs"]
+  sandbox["E2B sandbox<br/>/skills baked into template"]
+
+  frontend --> aegra
+  aegra --> qa
+  aegra --> title
+  qa --> middleware --> deepAgent
+  deepAgent --> search --> retrieval --> appDb
+  deepAgent --> read --> retrieval
+  deepAgent --> download --> sandbox
+  deepAgent --> sandbox
+  aegra --> agentDb
+  title --> titleGraph --> agentDb
+```
 
 ### Frontend Architecture
 
@@ -208,6 +349,33 @@ PDF dialog on the cited page and searches/highlights the cited text span.
 Retrieved source files are rendered after the assistant response finishes
 streaming.
 
+```mermaid
+flowchart TB
+  app["app/<br/>shell, layout, drag/drop"]
+  chat["features/chat<br/>runtime, composer, threads"]
+  docs["features/documents<br/>panel, upload, availability"]
+  focus["features/focus-documents<br/>thread metadata focus set"]
+  cites["features/citations<br/>markers, chips, sources, tool UI"]
+  pdf["features/pdf<br/>viewer, search, highlighting"]
+  api["lib/api<br/>/api"]
+  agents["lib/agents<br/>/agents"]
+  ui["components/ui<br/>shadcn/Radix"]
+  aui["components/assistant-ui<br/>message + tool renderers"]
+
+  app --> chat
+  app --> docs
+  app --> pdf
+  chat --> agents
+  chat --> focus
+  chat --> cites
+  docs --> api
+  docs --> focus
+  cites --> pdf
+  chat --> aui
+  docs --> ui
+  pdf --> ui
+```
+
 ### Tests
 
 Tests are colocated with the modules they cover:
@@ -228,6 +396,19 @@ The suite emphasizes:
 - ingestion state transitions,
 - citation/tool artifact contracts,
 - the API/agents -> services -> db boundary.
+
+```mermaid
+flowchart LR
+  apiTests["backend/api/tests<br/>route behavior"]
+  agentTests["backend/agents/qa_agent/tests<br/>context + tool contracts"]
+  serviceTests["backend/lib/services/tests<br/>service, ingestion, retrieval"]
+  archTests["backend/tests<br/>architecture boundaries"]
+
+  apiTests --> services["services"]
+  agentTests --> agentContracts["agent contracts"]
+  serviceTests --> serviceBehavior["service behavior"]
+  archTests --> boundary["api/agents must not import db directly"]
+```
 
 ## Technology
 
