@@ -283,13 +283,15 @@ cargo install just
 
 ### First Run
 
-1. Create the local environment file and build images:
+1. Use `just` to create the local environment file and build images:
 
    ```bash
    just setup
    ```
 
-2. Fill in `.env`:
+   This copies `.env.example` to `.env` if it does not already exist.
+
+2. Edit the generated `.env` file and fill in:
 
    ```bash
    ANTHROPIC_API_KEY=...
