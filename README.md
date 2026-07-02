@@ -41,7 +41,7 @@ files safely.
   - [Useful Commands](#useful-commands)
   - [Ports](#ports)
 - [Sample Documents](#sample-documents)
-- [Next Step: Agent Evals](#next-step-agent-evals)
+- [Next Steps](#next-steps)
 
 ## Architecture
 
@@ -229,6 +229,20 @@ Upload is intentionally cheap:
 
 The durable citation unit is a page-level chunk. Inline citation markers include
 the chunk id plus an exact text span for PDF highlighting.
+
+Page-level chunking is deliberate. Pages are natural, stable document
+boundaries, which makes them easy to reason about in a legal review workflow and
+gives citations a durable unit that maps cleanly back to the original PDF.
+NVIDIA's chunking research found page-level chunking to be the strongest default
+across diverse RAG datasets, with the highest average answer accuracy and the
+lowest variance, and specifically notes that static page boundaries make
+citations and references easier to preserve than token-sized chunks. See
+[Finding the Best Chunking Strategy for Accurate AI Responses](https://developer.nvidia.com/blog/finding-the-best-chunking-strategy-for-accurate-ai-responses/).
+
+The ingestion pipeline does not persist text bounding boxes yet. That was a
+deliberate scope tradeoff to save indexing time and keep ingestion lightweight:
+the system stores page-level chunks plus extracted text, then highlights the
+exact cited text span in the PDF viewer on demand.
 
 ```mermaid
 sequenceDiagram
@@ -698,10 +712,33 @@ The Vite dev server proxies:
 Use the PDFs in `sample-docs/` to exercise ingestion, retrieval, citations, and
 PDF highlighting.
 
-## Next Step: Agent Evals
+## Next Steps
 
-The next major engineering step is an agent evaluation suite. Good evals should
-cover:
+### Observability Coverage
+
+The next broad engineering step is production-grade observability across the
+whole app, with special attention to the frontend. The backend already has
+scoped Loguru logs and the agent stack can use LangSmith traces, but the browser
+experience should also be measurable:
+
+- Sentry for frontend and backend exception monitoring, release tracking, and
+  source-mapped stack traces.
+- Mixpanel, PostHog, or a similar product analytics tool for feature funnels:
+  upload started/completed, ingestion completed/failed, question submitted,
+  citation clicked, source opened, PDF search used, generated file downloaded,
+  and user feedback submitted.
+- Web-vital and interaction telemetry for perceived quality: time to first
+  usable chat, upload-to-ready latency, first-token latency, full-response
+  latency, PDF open latency, and citation-click-to-highlight latency.
+- Cross-service correlation ids that connect browser events, API requests, RQ
+  jobs, retrieval calls, agent runs, and LangSmith traces.
+- Operational dashboards and alerts for ingestion failure rate, queue depth,
+  embedding latency, retrieval latency, sandbox creation failures, model errors,
+  and uncited document-answer rates.
+
+### Agent Evals
+
+The next agent-quality step is an evaluation suite. Good evals should cover:
 
 - retrieval quality across focus and available document scopes,
 - citation correctness and highlightability,
@@ -711,4 +748,4 @@ cover:
 - regression fixtures built from the sample due-diligence documents.
 
 That would turn the current architecture from well-tested components into a
-measurable product loop for agent quality.
+measurable product loop for agent quality and product reliability.
