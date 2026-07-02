@@ -30,3 +30,7 @@ pgdata/
 
 # Internal data generation scripts
 scripts/generate-usage-data.py
+
+# Documents
+PART_1.md
+output/

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
 	Tooltip,
 	TooltipContent,
@@ -7,6 +8,8 @@ import {
 } from "@/components/ui/tooltip";
 import type { Document } from "@/types";
 import { DocumentRow } from "./document-row";
+
+const SKELETON_ROWS = ["row-1", "row-2", "row-3"];
 
 interface DocumentSectionProps {
 	title: string;
@@ -90,9 +93,11 @@ export function DocumentSection({
 				{action}
 			</div>
 
-			{count === 0 ? (
+			{loading && count === 0 ? (
+				<DocumentSectionSkeleton focus={focus} />
+			) : count === 0 ? (
 				<p className="mt-2 px-2 pb-1 text-xs leading-snug text-neutral-400">
-					{loading ? "Loading…" : emptyHint}
+					{emptyHint}
 				</p>
 			) : (
 				<ul className="space-y-0.5">
@@ -120,5 +125,32 @@ export function DocumentSection({
 				</ul>
 			)}
 		</section>
+	);
+}
+
+function DocumentSectionSkeleton({ focus }: { focus: boolean }) {
+	const rows = focus ? SKELETON_ROWS.slice(0, 2) : SKELETON_ROWS;
+
+	return (
+		<ul aria-label="Loading documents" className="space-y-0.5">
+			{rows.map((row, index) => (
+				<li
+					key={row}
+					className="flex h-[52px] items-center gap-2 rounded-lg px-2 py-1.5"
+				>
+					<Skeleton className="size-4 shrink-0 rounded-sm" />
+					<Skeleton className="size-4 shrink-0 rounded-sm" />
+					<div className="min-w-0 flex-1 space-y-1.5">
+						<Skeleton
+							className="h-3.5"
+							style={{ width: `${index === 0 ? 78 : index === 1 ? 64 : 72}%` }}
+						/>
+						<Skeleton className="h-3 w-14" />
+					</div>
+					<Skeleton className="size-7 shrink-0 rounded-md" />
+					<Skeleton className="size-7 shrink-0 rounded-md" />
+				</li>
+			))}
+		</ul>
 	);
 }

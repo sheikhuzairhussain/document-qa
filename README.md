@@ -1,5 +1,7 @@
 # Orbital Document Q&A
 
+## Overview
+
 Orbital is a document Q&A workspace for commercial real estate due diligence.
 Lawyers can upload PDFs, pin important files to a chat, ask document-grounded
 questions, inspect citations in the original PDF, and download generated files
@@ -18,6 +20,28 @@ The system is intentionally split into clear layers:
 That separation keeps the system lightweight where it should be lightweight,
 while still giving the agent enough structure to cite, retrieve, and produce
 files safely.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Backend Monorepo](#backend-monorepo)
+  - [Services](#services)
+  - [Document Ingestion](#document-ingestion)
+  - [Retrieval](#retrieval)
+  - [Agents](#agents)
+  - [Sandbox Skills](#sandbox-skills)
+  - [Frontend Architecture](#frontend-architecture)
+  - [Observability And Logging](#observability-and-logging)
+  - [Tests](#tests)
+- [Technology](#technology)
+- [Development Setup](#development-setup)
+  - [Prerequisites](#prerequisites)
+  - [First Run](#first-run)
+  - [Useful Commands](#useful-commands)
+  - [Ports](#ports)
+- [Sample Documents](#sample-documents)
+- [Next Step: Agent Evals](#next-step-agent-evals)
 
 ## Architecture
 
@@ -85,7 +109,7 @@ flowchart TB
   title --> aegraDb
 ```
 
-### Backend Layering
+### Backend Monorepo
 
 The backend is organized as a small monorepo:
 
@@ -284,6 +308,64 @@ sandbox uses the `qa-agent-sandbox` template and exposes script-backed skills fo
 PDF, Word, PowerPoint, and spreadsheet work. Generated files are returned through
 download URL tool artifacts, not raw URLs in assistant text.
 
+### Sandbox Skills
+
+The QA agent has two kinds of capabilities:
+
+- ordinary tools, such as `search_documents`, `read_document`, and
+  `get_download_url`, which are implemented in Python and exposed directly to the
+  agent;
+- sandbox skills, which are prompt-and-script bundles for document production or
+  file analysis inside E2B.
+
+Skills live in `backend/agents/qa_agent/skills`:
+
+```text
+backend/agents/qa_agent/skills/
+  docx/
+  pdf/
+  pptx/
+  xlsx/
+```
+
+Those folders are not copied into sandboxes at request time. Instead,
+`backend/agents/scripts/e2b_template/template.py` bakes them into `/skills`
+during the E2B template build. This keeps agent runs lightweight and
+deterministic: every sandbox created from `qa-agent-sandbox` starts with the same
+skill files and the same OS, Python, and Node dependencies.
+
+The template installs the tools those skills need, including LibreOffice,
+Poppler, QPDF, Pandoc, Tesseract, Node/npm, Python document libraries, and Node
+packages for Office-generation workflows. The template also includes a smoke
+check at `/usr/local/bin/qa-agent-sandbox-smoke` that verifies imports, command
+line tools, Node packages, and `/skills/*/SKILL.md`.
+
+To update or add a skill:
+
+1. Add or edit the skill folder under `backend/agents/qa_agent/skills`.
+2. Update `backend/agents/scripts/e2b_template/template.py` if the skill needs
+   new OS, Python, or Node dependencies.
+3. Rebuild the template:
+
+   ```bash
+   uv run python backend/agents/scripts/e2b_template/build.py
+   ```
+
+4. Create a sandbox from `qa-agent-sandbox` and run:
+
+   ```bash
+   qa-agent-sandbox-smoke
+   ```
+
+At runtime, the QA graph only enables sandbox-backed skills when a run has a
+thread id. Runs without a thread id are created without an E2B backend and
+without `/skills`, which keeps non-threaded graph loading simple and avoids
+creating unnecessary sandboxes.
+
+The skill folders are excluded from Ruff and Pyright because they are
+agent-facing assets, not normal application modules. The application code around
+them remains statically checked.
+
 ```mermaid
 flowchart TB
   frontend["Frontend<br/>assistant-ui + LangGraph SDK"]
@@ -377,6 +459,70 @@ flowchart TB
   pdf --> ui
 ```
 
+### Observability And Logging
+
+The backend uses Loguru through a small scoped logging adapter in
+`backend/lib/logging.py`. Logs are structured around the system boundary that
+emits them, so local debugging can follow a request or job through the stack
+without guessing where a line came from.
+
+Common scopes include:
+
+- `api` for FastAPI lifespan and startup work.
+- `routers:documents` for HTTP document endpoints.
+- `services:documents`, `services:queue`, `services:ingestion`,
+  `services:embeddings`, and `services:retrieval` for application behavior.
+- `workers:ingestion` for the RQ job adapter.
+- `agents:qa_agent` and `agents:title_agent` for agent graph/tool behavior.
+- `db` for database session factory setup.
+- `config` for settings initialization.
+
+The log format includes timestamp, level, process, scope, message, and bound
+context fields:
+
+```text
+2026-07-02 01:30:39.470 | INFO | MainProcess:90818 | services:ingestion | Ingestion completed | document_id='doc_123' page_count=12 duration_ms=8421.5
+```
+
+Use `LOG_LEVEL` to change verbosity locally. The `just logs-*` commands tail
+the Docker services that emit these logs:
+
+```bash
+just logs-api
+just logs-worker
+just logs-agents
+```
+
+LangChain and LangGraph can also send agent traces directly to LangSmith, which
+is the right place to inspect model/tool behavior, retrieval decisions, and
+multi-step agent runs. The current codebase is ready for that style of tracing
+through the standard LangSmith/LangChain configuration, but observability
+coverage can still improve across the whole app: request correlation ids,
+frontend interaction telemetry, queue latency metrics, ingestion timing
+histograms, and explicit retrieval-quality traces would make production
+debugging much sharper.
+
+```mermaid
+flowchart LR
+  frontend["Frontend events<br/>future telemetry"]
+  api["api / routers<br/>Loguru scopes"]
+  services["services<br/>document, ingestion, retrieval"]
+  worker["workers:ingestion<br/>RQ jobs"]
+  agents["agents:*<br/>LangGraph + tools"]
+  logs["Container logs<br/>just logs-*"]
+  langsmith["LangSmith<br/>agent traces"]
+  future["Future coverage<br/>correlation ids + metrics"]
+
+  frontend -.-> future
+  api --> logs
+  services --> logs
+  worker --> logs
+  agents --> logs
+  agents --> langsmith
+  logs --> future
+  langsmith --> future
+```
+
 ### Tests
 
 Tests are colocated with the modules they cover:
@@ -429,6 +575,8 @@ flowchart LR
 - Anthropic models through LangChain/Deep Agents integrations
 - Aegra for LangGraph-compatible agent serving
 - E2B sandboxes through `langchain-e2b`
+- Loguru for scoped application logs
+- LangSmith-compatible LangChain/LangGraph tracing
 - Ruff, Pyright, Pytest, pytest-asyncio
 
 ### Frontend
