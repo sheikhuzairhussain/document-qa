@@ -736,6 +736,15 @@ experience should also be measurable:
   embedding latency, retrieval latency, sandbox creation failures, model errors,
   and uncited document-answer rates.
 
+### Document Library Management
+
+I would add a dedicated frontend page for managing the document library across
+chats. The current sidebar works well for chat-scoped focus and availability,
+but a full library view would make it easier to rename documents, inspect
+processing status, delete stale files, preview PDFs, see which chats reference a
+document, and manage reusable due-diligence materials without entering a
+specific chat first.
+
 ### Agent Evals
 
 The next agent-quality step is an evaluation suite. Good evals should cover:

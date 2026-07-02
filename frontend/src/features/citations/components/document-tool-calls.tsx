@@ -11,7 +11,6 @@ import {
 	BotIcon,
 	ChevronDownIcon,
 	DownloadIcon,
-	ExternalLinkIcon,
 	FilePenIcon,
 	FileSearchIcon,
 	FileTextIcon,
@@ -375,47 +374,21 @@ const SandboxDownloadToolRow: FC<{ part: DocumentToolPart }> = ({ part }) => {
 	const artifact = extractSandboxDownloadUrlArtifact(part.artifact);
 	const isRunning =
 		part.status.type === "running" || part.status.type === "requires-action";
-	if (!isRunning && artifact?.url) return null;
+	if (isRunning || artifact?.url) return null;
 
 	const isError =
 		(part.status.type === "incomplete" && part.status.reason !== "cancelled") ||
-		(!isRunning && (artifact?.error ?? null) !== null);
+		(artifact?.error ?? null) !== null;
 	const labels = DOCUMENT_TOOL_LABELS.get_download_url;
-	const label = isRunning
-		? labels.running
-		: isError
-			? labels.error
-			: labels.complete;
-	const content = (
-		<>
-			<BoxedToolRowIcon Icon={DownloadIcon} />
-			<DocumentToolLabel label={label} running={isRunning} />
-			{artifact?.url && (
-				<ExternalLinkIcon className="text-muted-foreground/60 ms-auto size-3.5 shrink-0" />
-			)}
-		</>
-	);
-
-	if (artifact?.url) {
-		return (
-			<a
-				data-slot="aui-document-tool-row"
-				className={cn(boxedDownloadToolRowClassName, "cursor-pointer")}
-				href={artifact.url}
-				target="_blank"
-				rel="noreferrer"
-			>
-				{content}
-			</a>
-		);
-	}
+	const label = isError ? labels.error : labels.complete;
 
 	return (
 		<div
 			data-slot="aui-document-tool-row"
 			className={cn(boxedDownloadToolRowClassName, "opacity-80")}
 		>
-			{content}
+			<BoxedToolRowIcon Icon={DownloadIcon} />
+			<DocumentToolLabel label={label} running={false} />
 		</div>
 	);
 };
