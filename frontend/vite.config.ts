@@ -1,4 +1,4 @@
-import { URL, fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -44,12 +44,12 @@ export default defineConfig({
 				target: "http://api:8000",
 				changeOrigin: true,
 			},
-			// Aegra (LangGraph Platform-compatible agent server). The browser hits
-			// `/aegra/*`; we strip the prefix and forward to the agents container.
-			"/aegra": {
+			// Agents (LangGraph Platform-compatible server). The browser hits
+			// `/agents/*`; we strip the prefix and forward to the agents container.
+			"/agents": {
 				target: "http://agents:2026",
 				changeOrigin: true,
-				rewrite: (path) => path.replace(/^\/aegra/, ""),
+				rewrite: (path) => path.replace(/^\/agents/, ""),
 			},
 		},
 	},

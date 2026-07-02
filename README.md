@@ -1,115 +1,379 @@
-# Orbital — Product Engineering Take-Home
+# Orbital Document Q&A
 
-Welcome! This is a take-home assessment for a Product Engineering role at Orbital.
+Orbital is a document Q&A workspace for commercial real estate due diligence.
+Lawyers can upload PDFs, pin important files to a chat, ask document-grounded
+questions, inspect citations in the original PDF, and download generated files
+from a sandboxed agent workflow.
 
-You've been given a working baseline application: a document Q&A tool for commercial real estate lawyers. Users upload legal documents (leases, title reports, environmental assessments) and ask questions about them. The AI assistant answers questions grounded in the document content.
+The system is intentionally split into clear layers:
 
-The app works, but it has limitations. Your job is to extend it.
+- **Frontend** owns the product experience and conversation state.
+- **API** is a thin HTTP adapter.
+- **Services** own application behavior, database access, ingestion, retrieval,
+  and queue boundaries.
+- **Agents** orchestrate LLM reasoning and tools, but go through services for
+  document data.
+- **DB** persists documents, page-level chunks, embeddings, and agent state.
 
----
+That separation keeps the system lightweight where it should be lightweight,
+while still giving the agent enough structure to cite, retrieve, and produce
+files safely.
 
-## Setup
+## Architecture
+
+```mermaid
+flowchart TB
+  user["User"]
+
+  subgraph frontend["Frontend: React + Vite"]
+    app["Feature-based UI<br/>chat, documents, citations, PDF viewer"]
+    sdk["LangGraph SDK client<br/>/agents"]
+    apiClient["API client<br/>/api"]
+  end
+
+  subgraph api["API container: FastAPI"]
+    routers["HTTP routers<br/>thin adapters"]
+  end
+
+  subgraph services["backend/lib/services"]
+    docSvc["document service<br/>upload, list, delete, file serving"]
+    ingestSvc["ingestion service<br/>PyMuPDF page split + text extraction"]
+    embedSvc["embedding service<br/>Gemini Embedding 2"]
+    retrievalSvc["retrieval service<br/>hybrid search + chunk reads"]
+    queueSvc["queue service<br/>RQ enqueue"]
+  end
+
+  subgraph data["Data layer"]
+    appDb["Timescale/Postgres<br/>documents + document_chunks<br/>pgvector + pgvectorscale + pg_textsearch"]
+    redis["Redis<br/>RQ ingestion queue"]
+    uploads["uploads/<br/>stored PDFs"]
+  end
+
+  subgraph worker["Worker container"]
+    rq["RQ SimpleWorker<br/>process_document"]
+  end
+
+  subgraph agents["Agents container: Aegra + LangGraph"]
+    qa["qa-agent<br/>Deep Agents + tools"]
+    title["title-agent<br/>minimal LangChain title generator"]
+    e2b["E2B sandbox<br/>template-baked skills"]
+  end
+
+  subgraph agentDb["Agent state"]
+    aegraDb["Agents Postgres<br/>threads + runs"]
+  end
+
+  user --> app
+  app --> apiClient --> routers
+  app --> sdk --> qa
+  app --> sdk --> title
+
+  routers --> docSvc
+  docSvc --> queueSvc --> redis
+  docSvc --> appDb
+  docSvc --> uploads
+
+  redis --> rq --> ingestSvc
+  ingestSvc --> uploads
+  ingestSvc --> embedSvc
+  ingestSvc --> appDb
+
+  qa --> retrievalSvc
+  qa --> e2b
+  retrievalSvc --> appDb
+  qa --> aegraDb
+  title --> aegraDb
+```
+
+### Backend Layering
+
+The backend is organized as a small monorepo:
+
+```text
+backend/
+  api/                 FastAPI app and API Dockerfile
+  agents/              Aegra-served LangGraph agents, skills, E2B template scripts
+  lib/
+    db/                SQLAlchemy models and session factories
+    services/          Shared application services
+  tests/               Cross-module architecture tests
+```
+
+The dependency direction is deliberate:
+
+```text
+api      -> services -> db
+agents   -> services -> db
+worker   -> services -> db
+```
+
+`backend/api` and `backend/agents` do not import the database layer directly.
+The architecture test in `backend/tests/test_architecture.py` guards that rule.
+This keeps request handling and agent orchestration thin, and leaves database
+details behind service APIs.
+
+### Services
+
+The service layer is where application behavior lives:
+
+- `document.py` stores PDFs, creates document records, enqueues ingestion,
+  resolves files for viewing, and owns database session lifecycle for document
+  operations.
+- `queue.py` wraps the Redis/RQ ingestion queue.
+- `ingestion.py` is the background job: split a PDF into pages, extract sorted
+  page text with PyMuPDF, embed each single-page PDF, and write one chunk per
+  page.
+- `embeddings.py` wraps Gemini Embedding 2 for page-PDF and query embeddings.
+- `retrieval.py` performs hybrid retrieval and document/chunk metadata reads for
+  agents.
+
+### Document Ingestion
+
+Upload is intentionally cheap:
+
+1. The API receives a PDF and calls the document service.
+2. The service stores the file, writes a `documents` row with `pending` status,
+   and enqueues an RQ job.
+3. The worker marks the document `processing`, splits it page-by-page with
+   PyMuPDF, extracts text, embeds each page with Gemini Embedding 2, and stores
+   one `document_chunks` row per page.
+4. Embedding runs in parallel with `EMBEDDING_CONCURRENCY=32` by default.
+5. The document becomes `completed` or `failed`, with status visible in the UI.
+
+The durable citation unit is a page-level chunk. Inline citation markers include
+the chunk id plus an exact text span for PDF highlighting.
+
+### Retrieval
+
+Retrieval uses a hybrid search strategy over `document_chunks`:
+
+- Dense retrieval: pgvector/pgvectorscale vector similarity over Gemini
+  embeddings.
+- Sparse retrieval: pg_textsearch BM25 over extracted page text.
+- Fusion: reciprocal rank fusion combines the dense and sparse rankings.
+
+The Postgres service uses `timescale/timescaledb-ha:pg17`, which bundles
+pgvector, pgvectorscale, and pg_textsearch. Retrieval is exposed to the agent
+through service-backed tools, so the agent never touches SQL directly.
+
+### Agents
+
+Agents are served by Aegra, which provides a LangGraph-compatible runtime:
+
+- `qa-agent` uses Deep Agents with document tools:
+  - `search_documents`
+  - `read_document`
+  - `get_download_url`
+- `title-agent` is a minimal LangChain agent that generates concise chat titles
+  from the user's first message.
+
+The QA agent receives hidden focus-document context via middleware. Focus
+documents are prioritized, but retrieval can still search the available document
+library according to the chat's retrieval filter.
+
+When a run has a thread id, the QA agent can attach an E2B sandbox backend. The
+sandbox uses the `qa-agent-sandbox` template and exposes script-backed skills for
+PDF, Word, PowerPoint, and spreadsheet work. Generated files are returned through
+download URL tool artifacts, not raw URLs in assistant text.
+
+### Frontend Architecture
+
+The frontend is a feature-based React application:
+
+```text
+frontend/src/
+  app/                 App shell, layout, drag/drop orchestration
+  components/
+    ui/                shadcn/Radix primitives
+    assistant-ui/      Assistant UI renderers and tool rows
+  features/
+    chat/              Assistant runtime, composer, threads, mentions
+    citations/         Citation parsing, chips, sources, tool output
+    documents/         Document panel, uploads, availability selection
+    focus-documents/   Focus document state synced to thread metadata
+    pdf/               PDF dialog, highlighting, preview/download support
+  lib/                 API clients and shared helpers
+```
+
+The chat experience uses assistant-ui and the LangGraph SDK. The document panel
+distinguishes:
+
+- **Focus documents**: pinned to the chat and surfaced to the agent as hidden
+  priority context.
+- **Available documents**: retrieval scope for search; can be explicit document
+  ids or `"all"`.
+
+Inline citations are rendered as compact chips. Clicking a citation opens the
+PDF dialog on the cited page and searches/highlights the cited text span.
+Retrieved source files are rendered after the assistant response finishes
+streaming.
+
+### Tests
+
+Tests are colocated with the modules they cover:
+
+```text
+backend/api/tests/                 API route tests
+backend/agents/qa_agent/tests/     Agent context/tool formatting tests
+backend/lib/services/tests/        Service, ingestion, embedding, retrieval tests
+backend/tests/                     Cross-module architecture tests
+```
+
+The suite emphasizes:
+
+- service behavior without real external services,
+- typed fakes instead of loose mocks,
+- route behavior through FastAPI `TestClient`,
+- retrieval SQL parameter shaping,
+- ingestion state transitions,
+- citation/tool artifact contracts,
+- the API/agents -> services -> db boundary.
+
+## Technology
+
+### Backend
+
+- Python 3.12
+- FastAPI and Uvicorn
+- SQLAlchemy async + sync sessions
+- Alembic migrations
+- Timescale/Postgres with pgvector, pgvectorscale, and pg_textsearch
+- Redis + RQ for background ingestion
+- PyMuPDF for PDF splitting and text extraction
+- Google Gemini Embedding 2 via `google-genai`
+- Anthropic models through LangChain/Deep Agents integrations
+- Aegra for LangGraph-compatible agent serving
+- E2B sandboxes through `langchain-e2b`
+- Ruff, Pyright, Pytest, pytest-asyncio
+
+### Frontend
+
+- React 18 + Vite
+- TypeScript
+- Tailwind CSS v4
+- shadcn/Radix UI primitives
+- assistant-ui
+- LangGraph SDK
+- React Query
+- Zustand
+- Zod
+- React Dropzone
+- React PDF / PDF.js
+- Lucide icons
+- Biome
+
+## Development Setup
 
 ### Prerequisites
+
 - Docker and Docker Compose
-- just (command runner) — install via `brew install just` or `cargo install just`
+- `just`
 
-That's it. Everything else runs inside containers.
+Install `just` with:
 
-### Getting Started
-
-1. Clone this repository
-
-2. Run the setup command:
+```bash
+brew install just
 ```
-just setup
+
+or:
+
+```bash
+cargo install just
 ```
-   This copies `.env.example` to `.env` and builds the Docker images.
 
-3. Add your API keys to `.env`:
-```
-ANTHROPIC_API_KEY=your_key_here
-GOOGLE_API_KEY=your_key_here
-```
-   The Anthropic key powers the chat/agent models; the Google key powers
-   document-page and query **embeddings** for retrieval. We've provided an
-   Anthropic key in the task email. You can also use your own.
+### First Run
 
-   > Note: the databases use **ephemeral in-container storage** (no volumes), so
-   > data is discarded when the containers are removed. Migrations re-run on
-   > startup, so every fresh `just dev` starts from a clean, correctly-migrated
-   > database.
+1. Create the local environment file and build images:
 
-4. Start everything:
-```
-just dev
-```
-   This starts PostgreSQL, the FastAPI API (port 8000), and the React frontend (port 5173).
-   Database migrations run automatically when the API starts — no separate step needed.
+   ```bash
+   just setup
+   ```
 
-5. Open http://localhost:5173 in your browser.
+2. Fill in `.env`:
 
-Your local `backend/` and `frontend/src/` directories are mounted into the containers —
-edit files normally on your machine and changes hot-reload automatically.
+   ```bash
+   ANTHROPIC_API_KEY=...
+   GOOGLE_API_KEY=...
+   E2B_API_KEY=...
+   ```
 
-### Document ingestion & retrieval
+   `ANTHROPIC_API_KEY` powers the chat and title agents.
+   `GOOGLE_API_KEY` powers page and query embeddings.
+   `E2B_API_KEY` is needed for sandbox-backed file workflows.
 
-Uploaded PDFs are indexed by a background pipeline so the assistant can retrieve
-the relevant passages instead of being handed the whole document:
+3. Start the stack:
 
-1. **Upload** (`backend/lib/services/document.py`) — the file is stored, the
-   `documents` row is created with `status="pending"`, and an ingestion job is
-   pushed onto a Redis-backed **RQ** queue. Upload does not parse or extract the
-   PDF.
-2. **Worker** (`backend/lib/services/ingestion.py`, the `worker` service) —
-   splits the PDF into single-page PDFs with **PyMuPDF**, extracts page text and
-   block-level geometry, embeds each page with **Gemini Embedding 2**, and stores
-   one row per page in `document_chunks`. Page embedding runs with 32 concurrent
-   calls by default. The document moves `processing → completed` (or `failed`,
-   with an error message). Scanned / image-only pages can still be visually
-   searchable through the PDF embedding, but quoteable text is only stored when
-   PyMuPDF can extract it.
-3. **Status** — `status`, `chunk_count`, and `error` are returned by the
-   documents API and shown per-row in the UI (it polls while indexing), with a
-   "Retry processing" action for failures.
-4. **Retrieval** — the `qa-agent` (`backend/agents/qa_agent/`) exposes a
-   `search_documents` tool that runs **hybrid search** over `document_chunks`:
-   dense similarity via **pgvectorscale** (StreamingDiskANN, `<=>`) fused with
-   **pg_textsearch** BM25 keyword relevance (`<@>`) using **reciprocal rank
-   fusion**.
+   ```bash
+   just dev
+   ```
 
-Both vector and BM25 indexes come from the `timescale/timescaledb-ha` Postgres
-image (replacing `postgres:16-alpine`), which bundles pgvector, pgvectorscale,
-and pg_textsearch. `pg_textsearch` is enabled via `shared_preload_libraries` in
-`docker-compose.yml`, and the DB uses ephemeral in-container storage (no volume).
-The schema lives in migration `003`.
+4. Open:
 
-New services in `docker-compose.yml`: `redis` (queue broker) and `worker` (the
-RQ consumer, sharing the API image). `just dev` starts them with the rest.
+   ```text
+   http://localhost:5173
+   ```
 
-### Sample Documents
-
-We've included sample legal documents in `sample-docs/` for testing.
-
-### Project Structure
-
-- `frontend/` — React frontend (Vite + Tailwind + shadcn/Radix UI)
-- `backend/api/` — FastAPI app and API container entrypoint
-- `backend/agents/` — Aegra-served LangGraph agents and agent container entrypoint
-- `backend/lib/db/` — SQLAlchemy models and sessions
-- `backend/lib/services/` — shared application services used by API, worker, and agents
-- `alembic/` — Database migrations
-- `data/` — Product analytics and customer feedback (for Part 2)
-- `sample-docs/` — Sample PDF documents for testing
+The main database and the agents database are intentionally ephemeral in local
+development. Removing the containers resets them; migrations run again on
+startup.
 
 ### Useful Commands
 
-- `just dev` — Start full stack (Postgres + API + frontend)
-- `just stop` — Stop all services
-- `just reset` — Stop everything and clear database
-- `just check` — Run all linters and type checks
-- `just fmt` — Format all code
-- `just db-init` — Run database migrations
-- `just db-shell` — Open a psql shell
-- `just shell-api` — Shell into API container
-- `just logs-api` — Tail API logs
+```bash
+just                 # list available commands
+just dev             # start the full stack
+just dev-detach      # start in the background
+just stop            # stop services
+just reset           # stop services and remove database containers/volumes
+
+just logs            # tail all logs
+just logs-api        # tail API logs
+just logs-worker     # tail ingestion worker logs
+just logs-agents     # tail agents logs
+
+just check           # backend + frontend checks
+just test            # backend tests
+just fmt             # backend + frontend formatting
+
+just db-upgrade      # apply app DB migrations
+just db-shell        # open app DB psql
+just db-shell-agents # open agents DB psql
+
+just shell-api       # shell into API container
+just shell-agents    # shell into agents container
+just shell-frontend  # shell into frontend container
+```
+
+### Ports
+
+- Frontend: `5173`
+- API: `8000`
+- Main Postgres: `5432`
+- Agents server: `2026`
+- Agents Postgres: `5433`
+- Redis: `6379`
+
+The Vite dev server proxies:
+
+- `/api` -> `api:8000`
+- `/agents` -> `agents:2026`
+
+## Sample Documents
+
+Use the PDFs in `sample-docs/` to exercise ingestion, retrieval, citations, and
+PDF highlighting.
+
+## Next Step: Agent Evals
+
+The next major engineering step is an agent evaluation suite. Good evals should
+cover:
+
+- retrieval quality across focus and available document scopes,
+- citation correctness and highlightability,
+- refusal/uncertainty behavior when documents do not answer the question,
+- tool-use behavior for `search_documents` vs. `read_document`,
+- generated file workflows through the E2B sandbox,
+- regression fixtures built from the sample due-diligence documents.
+
+That would turn the current architecture from well-tested components into a
+measurable product loop for agent quality.
