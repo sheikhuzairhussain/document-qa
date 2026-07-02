@@ -14,7 +14,8 @@ export const ThreadWelcome: FC = () => {
 			</h2>
 			<p className="mt-2 max-w-md text-sm leading-relaxed text-neutral-500">
 				Upload to focus for this chat, or keep files in the library and choose
-				which ones are searchable.
+				which ones are searchable. You can also drop a document into the
+				workspace.
 			</p>
 		</div>
 	);

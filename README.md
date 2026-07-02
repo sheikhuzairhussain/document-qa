@@ -714,6 +714,31 @@ PDF highlighting.
 
 ## Next Steps
 
+### Multimodal Ingestion And Citations
+
+The first follow-up would be a multimodal ingestion and citation system. Today
+ingestion is text-first, so scanned pages, tables, and figures common in due
+diligence get flattened or dropped. I would use Mistral OCR to extract text,
+tables, and figures with layout and bounding boxes, then upgrade the citation
+unit from "page + text span" to "page + region + bbox" for precise highlighting,
+image-only document coverage, and richer retrieval over tables and figures.
+
+### Document System
+
+The current sidebar works well for chat-scoped focus and availability, but a
+dedicated library page would make it easier to rename documents, inspect
+processing status, delete stale files, preview PDFs, see which chats reference a
+document, and manage reusable due-diligence materials without entering a
+specific chat first.
+
+I would also add a polished semantic search surface for the document library,
+closer to a `Cmd+K` command palette than a basic filter box. Users should be
+able to search by filename, matter, clause, party, topic, or remembered wording;
+the UI could show document matches, relevant pages, processing state, and quick
+actions like add to focus, include for retrieval, open preview, or delete. That
+would make the document library feel like a reusable knowledge base rather than
+a passive file list.
+
 ### Observability Coverage
 
 The next broad engineering step is production-grade observability across the
@@ -735,15 +760,6 @@ experience should also be measurable:
 - Operational dashboards and alerts for ingestion failure rate, queue depth,
   embedding latency, retrieval latency, sandbox creation failures, model errors,
   and uncited document-answer rates.
-
-### Document Library Management
-
-I would add a dedicated frontend page for managing the document library across
-chats. The current sidebar works well for chat-scoped focus and availability,
-but a full library view would make it easier to rename documents, inspect
-processing status, delete stale files, preview PDFs, see which chats reference a
-document, and manage reusable due-diligence materials without entering a
-specific chat first.
 
 ### Agent Evals
 

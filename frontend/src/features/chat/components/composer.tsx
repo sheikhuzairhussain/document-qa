@@ -96,7 +96,7 @@ export const Composer: FC<{ availableDocuments: AvailableDocuments }> = ({
 					<ComposerUpload />
 					<LexicalComposerInput
 						ref={inputRef}
-						placeholder="Ask about your selected documents..."
+						placeholder="Ask about your selected documents, or @mention one..."
 						directiveChip={ComposerDocumentMentionChip}
 						directivePluginProps={{
 							onDirectiveSelect: handleDirectiveSelected,
